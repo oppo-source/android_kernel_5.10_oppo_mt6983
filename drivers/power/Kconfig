@@ -1,0 +1,115 @@
+# SPDX-License-Identifier: GPL-2.0-only
+source "drivers/power/reset/Kconfig"
+source "drivers/power/supply/Kconfig"
+
+source "drivers/power/oplus/Kconfig"
+config OPLUS_CHARGER
+	bool "OPLUS_CHARGER"
+	default n
+	help
+	  Set Yes to support OPLUS_CHARGER features
+	  smart battery.
+	  Set No to disable OPLUS_CHARGER features
+	  smart battery.
+
+config OPLUS_CHARGER_MTK
+	bool "OPLUS charger on MTK"
+	default n
+	help
+	  Say Yes here to declare charging system is on MTK
+	  Say No here to declare charging system is not on MTK
+
+config OPLUS_CHARGER_MTK_CHGIC
+	bool "OPLUS_CHARGER_MTK_CHG_IC"
+	default n
+	help
+	  Say Yes to use MTK platform charger ic
+	  Say No to use extern charger ic
+
+config OPLUS_CHARGER_MTK6983S
+	bool "OPLUS_CHARGER_MTK6983S"
+	default n
+	help
+	  Set yes to support OPLUS_CHARGER_MTK6983S features
+	  smart battery.
+	  Set No to disable OPLUS_CHARGER_MTK6983S features
+	  smart battery.
+
+config OPLUS_CHARGER_MTKAGING
+	bool "OPLUS_CHARGER_MTKAGING"
+	default n
+	help
+	  Set yes to support amend mtk aging algo features
+	  Set No to disable OPLUS_CHARGER_MTKAGING features
+
+config OPLUS_HVDCP_SUPPORT
+        bool "OPLUS_HVDCP_SUPPORT"
+        default n
+        help
+          Set yes to support hvdcp.
+
+config OPLUS_CHECK_CHARGERID_VOLT
+	bool "OPLUS_CHECK_CHARGERID_VOLT"
+	default n
+	help
+	  Set yes to support OPLUS_CHECK_CHARGERID_VOLT features
+	  smart battery.
+	  Set No to disable OPLUS_CHECK_CHARGERID_VOLT features
+	  smart battery.
+
+config OPLUS_4400MV_BATTERY_SUPPORT
+	bool "OPLUS_CHECK_CHARGERID_VOLT"
+	default n
+	help
+	  Set yes to support BATTERYID features
+	  smart battery.
+	  Set No to disable BATTERYID features
+	  smart battery.
+
+config OPLUS_CALL_MODE_SUPPORT
+	bool "OPLUS call mode support"
+	default n
+	help
+	  Say Y to enable support for the oplus call mode.
+
+config OPLUS_CALL_MODE_SUPPORT
+	bool "OPLUS call mode support"
+	help
+	  Say Y to enable support for the oplus call mode.
+
+config OPLUS_SHIP_MODE_SUPPORT
+	bool "OPLUS ship mode support"
+	default n
+	help
+	  Say Y to include support
+
+config OPLUS_SHORT_HW_CHECK
+	bool "OPLUS batt HW SHORT"
+	default n
+	help
+	  Say Y to include support
+
+config OPLUS_SMART_CHARGER_SUPPORT
+        bool "OPLUS Smart Charger support"
+        default n
+        help
+          Say Y to include support
+
+config OPLUS_SHORT_IC_CHECK
+	bool "OPLUS batt short "
+	help
+	  Say Y here to declare charging system is on MTK
+
+config OPLUS_CHG_DYNAMIC_CONFIG
+	bool "OPLUS_CHG_DYNAMIC_CONFIG"
+	default n
+	help
+	  Say Y to include support
+config MTK_KERNEL_POWER_OFF_CHARGING
+	bool "MTK kernel power off charging"
+	default n
+	help
+	  yes : support KPOC feature, power off charging would running by
+	  kernel and charging animation by kpoc service. no: not support KPOC
+	  feature.
+	  device won't enter charging mode if config is no.

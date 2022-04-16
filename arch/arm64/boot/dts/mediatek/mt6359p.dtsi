@@ -1,0 +1,529 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (c) 2020 MediaTek Inc.
+ */
+#include <dt-bindings/iio/mt635x-auxadc.h>
+
+&pwrap {
+	pmic: mt6359p {
+		compatible = "mediatek,mt6359p";
+		interrupt-controller;
+		#interrupt-cells = <2>;
+
+		accdet: accdet {
+			compatible = "mediatek,mt6359p-accdet";
+			accdet-name = "mt63xx-accdet";
+			accdet-mic-vol = <8>;
+			accdet-plugout-debounce = <1>;
+			accdet-mic-mode = <2>;
+			eint_use_ext_res = <0>;
+			headset-mode-setting = <0x500 0x500 1 0x1f0
+						0x800 0x800 0x20 0x44
+						0x4 0x1
+						0x5 0x3 0x3 0x5 0xe>;
+			headset-use-ap-eint = <0>;
+			headset-eint-num = <0>;
+			headset-eint-trig-mode = <1>;
+			headset-key-mode = <0>;
+			headset-three-key-threshold = <0 80 220 400>;
+			headset-three-key-threshold-CDD = <0 121 192 600>;
+			headset-four-key-threshold = <0 58 121 192 400>;
+			io-channels = <&pmic_auxadc AUXADC_ACCDET>;
+			io-channel-names = "pmic_accdet";
+			nvmem = <&pmic_efuse>;
+			nvmem-names = "mt63xx-accdet-efuse";
+			status = "okay";
+		};
+
+		mt6359pregulator: mt6359pregulator {
+			compatible = "mediatek,mt6359p-regulator";
+
+			mt6359p_vs1_reg: buck_vs1 {
+				regulator-name = "vs1";
+				regulator-min-microvolt = <800000>;
+				regulator-max-microvolt = <2200000>;
+				regulator-enable-ramp-delay = <0>;
+				regulator-always-on;
+			};
+
+			mt6359p_vgpu11_reg: buck_vgpu11 {
+				regulator-name = "vgpu11";
+				regulator-min-microvolt = <400000>;
+				regulator-max-microvolt = <1193750>;
+				regulator-ramp-delay = <5000>;
+				regulator-enable-ramp-delay = <200>;
+				regulator-allowed-modes = <0 1 2>;
+			};
+
+			mt6359p_vmodem_reg: buck_vmodem {
+				regulator-name = "vmodem";
+				regulator-min-microvolt = <400000>;
+				regulator-max-microvolt = <1100000>;
+				regulator-ramp-delay = <10760>;
+				regulator-enable-ramp-delay = <200>;
+			};
+
+			mt6359p_vpu_reg: buck_vpu {
+				regulator-name = "vpu";
+				regulator-min-microvolt = <400000>;
+				regulator-max-microvolt = <1193750>;
+				regulator-ramp-delay = <5000>;
+				regulator-enable-ramp-delay = <200>;
+				regulator-allowed-modes = <0 1 2>;
+			};
+
+			mt6359p_vcore_reg: buck_vcore {
+				regulator-name = "vcore";
+				regulator-min-microvolt = <506250>;
+				regulator-max-microvolt = <1300000>;
+				regulator-ramp-delay = <5000>;
+				regulator-enable-ramp-delay = <200>;
+				regulator-allowed-modes = <0 1 2>;
+			};
+
+			mt6359p_vs2_reg: buck_vs2 {
+				regulator-name = "vs2";
+				regulator-min-microvolt = <800000>;
+				regulator-max-microvolt = <1600000>;
+				regulator-enable-ramp-delay = <0>;
+				regulator-always-on;
+			};
+
+			mt6359p_vpa_reg: buck_vpa {
+				regulator-name = "vpa";
+				regulator-min-microvolt = <500000>;
+				regulator-max-microvolt = <3650000>;
+				regulator-enable-ramp-delay = <300>;
+			};
+
+			mt6359p_vproc2_reg: buck_vproc2 {
+				regulator-name = "vproc2";
+				regulator-min-microvolt = <400000>;
+				regulator-max-microvolt = <1193750>;
+				regulator-ramp-delay = <7500>;
+				regulator-enable-ramp-delay = <200>;
+				regulator-allowed-modes = <0 1 2>;
+			};
+
+			mt6359p_vproc1_reg: buck_vproc1 {
+				regulator-name = "vproc1";
+				regulator-min-microvolt = <400000>;
+				regulator-max-microvolt = <1193750>;
+				regulator-ramp-delay = <7500>;
+				regulator-enable-ramp-delay = <200>;
+				regulator-allowed-modes = <0 1 2>;
+			};
+
+			mt6359p_vcore_sshub_reg: buck_vcore_sshub {
+				regulator-name = "vcore_sshub";
+				regulator-min-microvolt = <400000>;
+				regulator-max-microvolt = <1193750>;
+			};
+
+			mt6359p_vaud18_reg: ldo_vaud18 {
+				regulator-name = "vaud18";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_vibr_reg: ldo_vibr {
+				regulator-name = "vibr";
+				regulator-min-microvolt = <1200000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_vrf12_reg: ldo_vrf12 {
+				regulator-name = "vrf12";
+				regulator-min-microvolt = <1100000>;
+				regulator-max-microvolt = <1300000>;
+				regulator-enable-ramp-delay = <480>;
+			};
+
+			mt6359p_vusb_reg: ldo_vusb {
+				regulator-name = "vusb";
+				regulator-min-microvolt = <3000000>;
+				regulator-max-microvolt = <3000000>;
+				regulator-enable-ramp-delay = <960>;
+				regulator-always-on;
+			};
+
+			mt6359p_vsram_proc2_reg: ldo_vsram_proc2 {
+				regulator-name = "vsram_proc2";
+				regulator-min-microvolt = <500000>;
+				regulator-max-microvolt = <1293750>;
+				regulator-ramp-delay = <7500>;
+				regulator-enable-ramp-delay = <240>;
+				regulator-always-on;
+			};
+
+			mt6359p_vio18_reg: ldo_vio18 {
+				regulator-name = "vio18";
+				regulator-min-microvolt = <1700000>;
+				regulator-max-microvolt = <1900000>;
+				regulator-enable-ramp-delay = <960>;
+				regulator-always-on;
+			};
+
+			mt6359p_vcamio_reg: ldo_vcamio {
+				regulator-name = "vcamio";
+				regulator-min-microvolt = <1700000>;
+				regulator-max-microvolt = <1900000>;
+				regulator-enable-ramp-delay = <1920>;
+			};
+
+			mt6359p_vcn18_reg: ldo_vcn18 {
+				regulator-name = "vcn18";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_vfe28_reg: ldo_vfe28 {
+				regulator-name = "vfe28";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+				regulator-enable-ramp-delay = <120>;
+			};
+
+			mt6359p_vcn13_reg: ldo_vcn13 {
+				regulator-name = "vcn13";
+				regulator-min-microvolt = <900000>;
+				regulator-max-microvolt = <1300000>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_vcn33_1_bt_reg: ldo_vcn33_1_bt {
+				regulator-name = "vcn33_1_bt";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <3500000>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_vcn33_1_wifi_reg: ldo_vcn33_1_wifi {
+				regulator-name = "vcn33_1_wifi";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <3500000>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_vaux18_reg: ldo_vaux18 {
+				regulator-name = "vaux18";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-enable-ramp-delay = <240>;
+				regulator-always-on;
+			};
+
+			mt6359p_vsram_others_reg: ldo_vsram_others {
+				regulator-name = "vsram_others";
+				regulator-min-microvolt = <500000>;
+				regulator-max-microvolt = <1293750>;
+				regulator-ramp-delay = <5000>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_vefuse_reg: ldo_vefuse {
+				regulator-name = "vefuse";
+				regulator-min-microvolt = <1700000>;
+				regulator-max-microvolt = <2000000>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_vxo22_reg: ldo_vxo22 {
+				regulator-name = "vxo22";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <2200000>;
+				regulator-enable-ramp-delay = <480>;
+				regulator-always-on;
+			};
+
+			mt6359p_vrfck_reg: ldo_vrfck {
+				regulator-name = "vrfck";
+				regulator-min-microvolt = <1240000>;
+				regulator-max-microvolt = <1600000>;
+				regulator-enable-ramp-delay = <480>;
+			};
+
+			mt6359p_vbif28_reg: ldo_vbif28 {
+				regulator-name = "vbif28";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_vio28_reg: ldo_vio28 {
+				regulator-name = "vio28";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-enable-ramp-delay = <1920>;
+				regulator-always-on;
+			};
+
+			mt6359p_vemc_reg: ldo_vemc {
+				regulator-name = "vemc";
+				regulator-min-microvolt = <2500000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_vcn33_2_bt_reg: ldo_vcn33_2_bt {
+				regulator-name = "vcn33_2_bt";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <3500000>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_vcn33_2_wifi_reg: ldo_vcn33_2_wifi {
+				regulator-name = "vcn33_2_wifi";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <3500000>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_va12_reg: ldo_va12 {
+				regulator-name = "va12";
+				regulator-min-microvolt = <1200000>;
+				regulator-max-microvolt = <1300000>;
+				regulator-enable-ramp-delay = <960>;
+				regulator-always-on;
+			};
+
+			mt6359p_va09_reg: ldo_va09 {
+				regulator-name = "va09";
+				regulator-min-microvolt = <800000>;
+				regulator-max-microvolt = <1200000>;
+				regulator-enable-ramp-delay = <960>;
+			};
+
+			mt6359p_vrf18_reg: ldo_vrf18 {
+				regulator-name = "vrf18";
+				regulator-min-microvolt = <1700000>;
+				regulator-max-microvolt = <1810000>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_vsram_md_reg: ldo_vsram_md {
+				regulator-name = "vsram_md";
+				regulator-min-microvolt = <500000>;
+				regulator-max-microvolt = <1293750>;
+				regulator-ramp-delay = <10760>;
+				regulator-enable-ramp-delay = <240>;
+			};
+
+			mt6359p_vufs_reg: ldo_vufs {
+				regulator-name = "vufs";
+				regulator-min-microvolt = <1700000>;
+				regulator-max-microvolt = <1900000>;
+				regulator-enable-ramp-delay = <1920>;
+			};
+
+			mt6359p_vm18_reg: ldo_vm18 {
+				regulator-name = "vm18";
+				regulator-min-microvolt = <1700000>;
+				regulator-max-microvolt = <1900000>;
+				regulator-enable-ramp-delay = <1920>;
+				regulator-always-on;
+			};
+
+			mt6359p_vbbck_reg: ldo_vbbck {
+				regulator-name = "vbbck";
+				regulator-min-microvolt = <1100000>;
+				regulator-max-microvolt = <1200000>;
+				regulator-enable-ramp-delay = <480>;
+			};
+
+			mt6359p_vsram_proc1_reg: ldo_vsram_proc1 {
+				regulator-name = "vsram_proc1";
+				regulator-min-microvolt = <500000>;
+				regulator-max-microvolt = <1293750>;
+				regulator-ramp-delay = <7500>;
+				regulator-enable-ramp-delay = <240>;
+				regulator-always-on;
+			};
+
+			mt6359p_vsram_others_sshub_ldo: ldo_vsram_others_sshub {
+				regulator-name = "vsram_others_sshub";
+				regulator-min-microvolt = <500000>;
+				regulator-max-microvolt = <1193750>;
+			};
+
+			mt6359p_isnk_load: isnk_load {
+				regulator-name = "isnk_load";
+			};
+		};
+
+		mt6359prtc: mt6359prtc {
+			compatible = "mediatek,mt6359p-rtc";
+
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			fg_init: fg_init {
+				reg = <0 0x1>;
+			};
+			fg_soc: fg_soc {
+				reg = <1 0x1>;
+			};
+			ext_32k: ext_32k {
+				reg = <2 0x1>;
+				bits = <6 1>;
+			};
+		};
+
+		mt63xx_debug {
+			compatible = "mediatek,mt63xx-debug";
+		};
+
+		pmic_auxadc: pmic_auxadc {
+			compatible = "mediatek,pmic-auxadc",
+				     "mediatek,mt6359p-auxadc";
+			#io-channel-cells = <1>;
+
+			batadc {
+				channel = <AUXADC_BATADC>;
+				resistance-ratio = <7 2>;
+				avg-num = <128>;
+			};
+			bat_temp {
+				channel = <AUXADC_BAT_TEMP>;
+				resistance-ratio = <5 2>;
+			};
+			chip_temp {
+				channel = <AUXADC_CHIP_TEMP>;
+			};
+			vcore_temp {
+				channel = <AUXADC_VCORE_TEMP>;
+			};
+			vproc_temp {
+				channel = <AUXADC_VPROC_TEMP>;
+			};
+			vgpu_temp {
+				channel = <AUXADC_VGPU_TEMP>;
+			};
+			accdet {
+				channel = <AUXADC_ACCDET>;
+			};
+			dcxo_volt {
+				channel = <AUXADC_VDCXO>;
+				resistance-ratio = <3 2>;
+			};
+			tsx_temp {
+				channel = <AUXADC_TSX_TEMP>;
+				avg-num = <128>;
+			};
+			hpofs_cal {
+				channel = <AUXADC_HPOFS_CAL>;
+				avg-num = <256>;
+			};
+			dcxo_temp {
+				channel = <AUXADC_DCXO_TEMP>;
+				avg-num = <16>;
+			};
+			vbif {
+				channel = <AUXADC_VBIF>;
+				resistance-ratio = <5 2>;
+			};
+			imp {
+				channel = <AUXADC_IMP>;
+				resistance-ratio = <7 2>;
+				avg-num = <128>;
+			};
+			imix_r {
+				channel = <AUXADC_IMIX_R>;
+				val = <90>;
+			};
+		};
+
+		pmic_efuse: pmic_efuse {
+			compatible = "mediatek,mt6359p-efuse";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			thermal_efuse_data1: e_data1 {
+				reg = <0x3e 10>;
+			};
+		};
+
+		mtk_gauge: mtk_gauge {
+			compatible = "mediatek,mt6359p-gauge";
+			bootmode = <&chosen>;
+			io-channels = <&pmic_auxadc AUXADC_BAT_TEMP>,
+					<&pmic_auxadc AUXADC_BATADC>,
+					<&pmic_auxadc AUXADC_VBIF>,
+					<&pmic_auxadc AUXADC_IMP>,
+					<&pmic_auxadc AUXADC_IMIX_R>;
+			io-channel-names = "pmic_battery_temp",
+					"pmic_battery_voltage",
+					"pmic_bif_voltage",
+					"pmic_ptim_voltage",
+					"pmic_ptim_r";
+			nvmem-cells = <&fg_init>, <&fg_soc>;
+			nvmem-cell-names = "initialization", "state-of-charge";
+		};
+		mt6359keys: mt6359keys {
+			compatible = "mediatek,mt6359p-keys";
+			mediatek,long-press-mode = <1>;
+			power-off-time-sec = <0>;
+
+			power {
+				linux,keycodes = <116>;
+				wakeup-source;
+			};
+
+			home {
+				linux,keycodes = <115>;
+			};
+		};
+
+		mt6359codec: mt6359codec {
+			compatible = "mediatek,mt6359p-sound";
+			mediatek,mic-type-0 = <3>;
+			mediatek,mic-type-1 = <3>;
+			mediatek,mic-type-2 = <3>;
+			io-channels = <&pmic_auxadc AUXADC_HPOFS_CAL>;
+			io-channel-names = "pmic_hpofs_cal";
+			nvmem = <&pmic_efuse>;
+			nvmem-names = "pmic-hp-efuse";
+		};
+
+		mt6359p_clock_buffer: mt6359p_clock_buffer {
+			compatible = "mediatek,clock_buffer";
+			mediatek,xo-mode-num = <4>;
+			mediatek,xo-buf-support = <1 1 1 1 0 0 1>;
+			mediatek,xo-buf-allow-control = <0 1 1 1 0 0 1>;
+			mediatek,xo-buf-name = "XO_SOC", "XO_WCN", "XO_NFC",
+						"XO_CEL", "NAN", "NAN",
+						"XO_EXT";
+			mediatek,bblpm-support;
+			mediatek,hwbblpm-support;
+			mediatek,xo-voter-support;
+			mediatek,dcxo-de-sense-support;
+			mediatek,dcxo-impedance-support;
+			mediatek,clkbuf-pmic-central-base;
+			mediatek,pmrc-en-support;
+
+			mediatek,enable;
+
+			clkbuf_ctl = <&clock_buffer_ctrl>;
+		};
+
+		mt6359p_dynamic_loading_throttling: mtk_dynamic_loading_throttling {
+			compatible = "mediatek,mt6359p-dynamic_loading_throttling";
+			/*charger: mtk_charger_thread*/
+			/*mediatek,charger = <&charger>;*/
+			/*2600~2900mv ,one gear per 50mv*/
+			uvlo-level = <2600>;
+			io-channels = <&pmic_auxadc AUXADC_IMP>,
+				      <&pmic_auxadc AUXADC_IMIX_R>,
+				      <&pmic_auxadc AUXADC_BATADC>;
+			io-channel-names = "pmic_ptim",
+					   "pmic_imix_r",
+					   "pmic_batadc";
+		};
+
+		mt6359p_lbat: pmic_lbat_service {
+			compatible = "mediatek,mt6359p-lbat_service";
+		};
+	};
+};

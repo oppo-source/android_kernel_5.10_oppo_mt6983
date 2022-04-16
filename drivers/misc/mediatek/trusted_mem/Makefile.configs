@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (C) 2018 MediaTek Inc.
+#
+
+#==========================================================================
+# Trusted Memory Subsystem Options
+#==========================================================================
+# Enable profiling support
+TCORE_PROFILING_SUPPORT := n
+
+# Enable auto dump profiling result at regmgr region off
+TCORE_PROFILING_AUTO_DUMP := n
+
+# Enable memory leak detection
+TCORE_MEMORY_LEAK_DETECTION_SUPPORT := n
+
+#==========================================================================
+# Feature Dependency Auto Changes
+#==========================================================================
+# Force enable option for ENG build only
+ifeq ($(CONFIG_TEST_MTK_TRUSTED_MEMORY),m)
+TCORE_PROFILING_SUPPORT := n
+TCORE_PROFILING_AUTO_DUMP := n
+TCORE_MEMORY_LEAK_DETECTION_SUPPORT := y
+endif

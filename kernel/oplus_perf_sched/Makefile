@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2018-2020 Oplus. All rights reserved.
+
+#ifdef OPLUS_FEATURE_SCHED_ASSIST
+obj-$(CONFIG_OPLUS_FEATURE_SCHED_ASSIST) 	+= sched_assist/
+#endif /* OPLUS_FEATURE_SCHED_ASSIST */
+
+#ifdef OPLUS_FEATURE_HEALTHINFO
+obj-$(CONFIG_OPLUS_FEATURE_HEALTHINFO)  += healthinfo/
+#endif /* OPLUS_FEATURE_HEALTHINFO */
+
+#ifdef OPLUS_FEATURE_TASK_CPUSTATS
+obj-$(CONFIG_OPLUS_FEATURE_TASK_CPUSTATS) 	+= task_cpustats/
+#endif /* OPLUS_FEATURE_TASK_CPUSTATS */
+
+
+#ifdef OPLUS_FEATURE_TASK_SCHED
+obj-$(CONFIG_OPLUS_FEATURE_TASK_SCHED)       += task_sched/
+#endif /* OPLUS_FEATURE_TASK_SCHED */
+
+#ifdef OPLUS_FEATURE_TASK_CPUSTATS
+obj-$(CONFIG_OPLUS_FEATURE_TASK_LOAD)       += task_load/
+#endif /* OPLUS_FEATURE_TASK_CPUSTATS */

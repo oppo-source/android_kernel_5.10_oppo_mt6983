@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2018-2020 Oplus. All rights reserved.
+
+config OPLUS_FEATURE_PERFORMANCE_SCHED
+	bool "config oplus kernel sched feature"
+	default y
+	help
+	  define this config to add oplus kernel sched feature
+
+config OPLUS_FEATURE_SCHED_ASSIST
+	tristate "sched assist"
+	default n
+	help
+	  turning sched for ui, render and so on to improve UX
+
+config OPLUS_FEATURE_SF_BOOST
+	tristate "sf boost"
+	default n
+	help
+	  When the util of surfaceflinger is greater than 90,
+	  prefer to use big core.
+
+config OPLUS_BINDER_PRIO_SKIP
+	tristate "config binder prio skip"
+	default n
+	depends on OPLUS_FEATURE_PERFORMANCE_SCHED
+	help
+	  Define this config for skip binder_transaction_priority.
+	  When a RT thread A do binder transaction with a cfs thread B,
+	  the priority of A will be set to the same as B (cfs).
+	  So it will affect the performance of A thread,
+	  so skip priority set during binder transaction in some situation.
+
+config OPLUS_FEATURE_HWC_BOOST
+	tristate "hwc boost"
+	default n
+	help
+	  When the util of hwc is greater than 51,
+	  prefer to use big core.
+
+config OPLUS_FEATURE_HEALTHINFO
+	tristate "config healthinfo"
+	default n
+	depends on OPLUS_FEATURE_PERFORMANCE_SCHED
+	help
+	  define this config to init  healthinfo.
+
+config OPLUS_FEATURE_TASK_CPUSTATS
+	tristate "task_cpustats"
+	default n
+	help
+	  record cpu status
+
+config OPLUS_FEATURE_SCHED_SPREAD
+	bool "sched spread"
+	default n
+	depends on OPLUS_FEATURE_SCHED_ASSIST
+	depends on CGROUP_SCHED
+	help
+	  This is the uifirst 5.0 feature, which will spread tasks,
+	  kick runnable time from task demand.
+
+config OPLUS_FEATURE_TASK_SCHED
+	tristate "task_sched"
+	default n
+	depends on OPLUS_FEATURE_SCHED_ASSIST
+	help
+	  record task sched info
+
+config OPLUS_FEATURE_TASK_LOAD
+	tristate "task_load"
+	default n
+	depends on OPLUS_FEATURE_SCHED_ASSIST
+	help
+	  record cpu and task load

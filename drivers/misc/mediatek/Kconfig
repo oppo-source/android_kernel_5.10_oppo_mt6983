@@ -1,0 +1,193 @@
+# SPDX-License-Identifier: GPL-2.0
+
+menu "Storage"
+source "drivers/misc/mediatek/pidmap/Kconfig"
+endmenu # Storage
+
+menu "Power, PMIC, Battery & Low Power"
+source "drivers/misc/mediatek/clkbuf/Kconfig"
+source "drivers/misc/mediatek/slbc/Kconfig"
+source "drivers/misc/mediatek/cm_mgr/Kconfig"
+source "drivers/misc/mediatek/mcupm/Kconfig"
+source "drivers/misc/mediatek/dvfsrc/Kconfig"
+source "drivers/misc/mediatek/dcm/Kconfig"
+source "drivers/misc/mediatek/qos/Kconfig"
+source "drivers/misc/mediatek/srclken_rc/Kconfig"
+source "drivers/misc/mediatek/lpm/Kconfig"
+source "drivers/misc/mediatek/ssc/Kconfig"
+source "drivers/misc/mediatek/swpm/Kconfig"
+source "drivers/misc/mediatek/power_throttling/Kconfig"
+source "drivers/misc/mediatek/pmic_protect/Kconfig"
+source "drivers/misc/mediatek/cpufreq_v1/Kconfig"
+source "drivers/misc/mediatek/cpufreq_lite/Kconfig"
+source "drivers/misc/mediatek/eemgpu/Kconfig"
+source "drivers/misc/mediatek/leakage_table/Kconfig"
+source "drivers/misc/mediatek/mdpm/Kconfig"
+source "drivers/misc/mediatek/pbm/Kconfig"
+source "drivers/misc/mediatek/pmsr/Kconfig"
+source "drivers/misc/mediatek/timer/Kconfig"
+endmenu # Power
+
+menu "MultiMedia, Display, Camera"
+source "drivers/misc/mediatek/iommu/Kconfig"
+source "drivers/misc/mediatek/cameraisp/Kconfig"
+source "drivers/misc/mediatek/cmdq/Kconfig"
+source "drivers/misc/mediatek/mtk-interconnect/Kconfig"
+source "drivers/misc/mediatek/mdp/Kconfig"
+source "drivers/misc/mediatek/mmp/Kconfig"
+source "drivers/misc/mediatek/lens/Kconfig"
+source "drivers/misc/mediatek/flashlight/Kconfig"
+source "drivers/misc/mediatek/flashlight/v4l2/Kconfig"
+source "drivers/misc/mediatek/imgsensor/Kconfig"
+source "drivers/misc/mediatek/jpeg/Kconfig"
+source "drivers/misc/mediatek/cam_cal/Kconfig"
+source "drivers/misc/mediatek/cam_timesync/Kconfig"
+source "drivers/misc/mediatek/camera_mem/Kconfig"
+source "drivers/misc/mediatek/vow/Kconfig"
+source "drivers/misc/mediatek/ccu/src/Kconfig"
+source "drivers/misc/mediatek/vdec_fmt/Kconfig"
+source "drivers/misc/mediatek/widevine_drm/Kconfig"
+source "drivers/misc/mediatek/mminfra/Kconfig"
+source "drivers/misc/mediatek/vmm_spm/Kconfig"
+source "drivers/misc/mediatek/vmm_dbg/Kconfig"
+endmenu # MultiMedia, Display, Camera
+
+menu "Security"
+source "drivers/misc/mediatek/trusted_mem/Kconfig"
+source "drivers/misc/mediatek/geniezone/Kconfig"
+source "drivers/misc/mediatek/masp/Kconfig"
+source "drivers/misc/mediatek/mkp/Kconfig"
+endmenu # Security
+
+menu "Tinysys"
+source "drivers/misc/mediatek/apusys/Kconfig"
+source "drivers/misc/mediatek/sspm/Kconfig"
+source "drivers/misc/mediatek/tinysys_scmi/Kconfig"
+source "drivers/misc/mediatek/scp/Kconfig"
+source "drivers/misc/mediatek/vcp/Kconfig"
+endmenu # Tinysys
+
+menu "Debug, log, trace"
+
+config MTK_MET
+	tristate "MET FEATURE ENABLE"
+	help
+	  This selects the MET profile function for MET device.
+	  If you want MET feature, say m here.
+	  This is needed if support for MET devices is required.
+	  If unsure, say N.
+
+config MTK_MET_DEBUG
+	bool "MET DEBUG"
+	depends on MTK_MET
+	help
+	  To prevent abi violation, we introduce MET DEBUG config
+	  for those MET features enabled only in eng/userdebug build.
+	  Say Y in eng/userdebug build.
+	  If unsure, say N.
+
+config RTNL_LOCK_DEBUG
+	bool "rtnl_lock debugging, deadlock detection"
+	depends on STACKTRACE_SUPPORT
+	select STACKTRACE
+	help
+	  If you say Y here then the kernel will detect whether any function
+	  hold rtnl_lock too long and some key information will be printed
+	  out to help locate the problem.
+	  If unsure, say N.
+
+config MTK_VM_DEBUG
+	bool "MTK_VM"
+	help
+	  This is used for debugging kernel memory management related
+	  seldom issues.
+	  Say Y here if you need debug kernel memory management.
+	  If unsure, say N
+
+source "drivers/misc/mediatek/blocktag/Kconfig"
+source "drivers/misc/mediatek/mtprof/Kconfig"
+source "drivers/misc/mediatek/locking/Kconfig"
+source "drivers/misc/mediatek/mmstat/Kconfig"
+source "drivers/misc/mediatek/aee/Kconfig"
+source "drivers/misc/mediatek/atf/Kconfig"
+source "drivers/misc/mediatek/sda/Kconfig"
+source "drivers/misc/mediatek/subpmic/Kconfig"
+source "drivers/misc/mediatek/monitor_hang/Kconfig"
+source "drivers/misc/mediatek/log_store/Kconfig"
+source "drivers/misc/mediatek/mtprintk/Kconfig"
+source "drivers/misc/mediatek/selinux_warning/Kconfig"
+endmenu # Debug
+
+menu "Modem & Connectivity"
+source "drivers/misc/mediatek/ccci_util/Kconfig"
+source "drivers/misc/mediatek/ccmni/Kconfig"
+source "drivers/misc/mediatek/eccci/Kconfig"
+source "drivers/misc/mediatek/btif/Kconfig"
+source "drivers/misc/mediatek/connectivity/Kconfig"
+source "drivers/misc/mediatek/conn_md/Kconfig"
+source "drivers/misc/mediatek/conn_scp/Kconfig"
+source "drivers/misc/mediatek/nfc/Kconfig"
+source "drivers/misc/mediatek/memory-amms/Kconfig"
+source "drivers/misc/mediatek/mddp/Kconfig"
+endmenu # Modem
+
+menu "Other Peripherals"
+source "drivers/misc/mediatek/typec/Kconfig"
+source "drivers/misc/mediatek/extcon/Kconfig"
+source "drivers/misc/mediatek/adsp/Kconfig"
+source "drivers/misc/mediatek/audio_ipi/Kconfig"
+source "drivers/misc/mediatek/usb_mtp/Kconfig"
+source "drivers/misc/mediatek/usb_rndis/Kconfig"
+source "drivers/misc/mediatek/usb_boost/Kconfig"
+source "drivers/misc/mediatek/usb_meta/Kconfig"
+source "drivers/misc/mediatek/usb20/Kconfig"
+source "drivers/misc/mediatek/irtx/Kconfig"
+source "drivers/misc/mediatek/pwm/Kconfig"
+source "drivers/misc/mediatek/sensor/Kconfig"
+source "drivers/misc/mediatek/gate_ic/Kconfig"
+#ifdef OPLUS_BUG_STABILITY
+source "drivers/misc/mediatek/boot_common/Kconfig"
+#endif
+endmenu # Other Peripheral
+
+menu "Performance"
+source "drivers/misc/mediatek/sched/Kconfig"
+source "drivers/misc/mediatek/cache-auditor/Kconfig"
+source "drivers/misc/mediatek/performance/Kconfig"
+source "drivers/misc/mediatek/perf_common/Kconfig"
+source "drivers/misc/mediatek/rps/Kconfig"
+source "drivers/misc/mediatek/task_turbo/Kconfig"
+endmenu # Performance
+
+menu "Config File"
+config BUILD_CONFIG_FILE
+	string "build config file"
+	help
+	  Specify the build.config file which record toolchain environment
+	  Such as "build.config.mtk.aarch64"
+
+config ABI_MONITOR
+	bool "abi monitor support"
+	help
+	  Used to enable abi monitor check for KMI,
+	  which is the interface between kernel modules and kernel(vmlinux).
+	  Say Y here if you are need abi monitor support.
+	  If unsure, say N
+
+config EXT_MODULES
+	string "out-of-tree kernel modules"
+	help
+	  Specify out-of-tree kernel modules to build in order
+	  The value must be kernel module repo list, such as
+	  "vendor/mediatek/kernel_modules/connectivity/common vendor/mediatek/kernel_modules/connectivity/gps"
+endmenu # Config
+
+menu "Misc configs"
+config FPGA_EARLY_PORTING
+	bool "MTK FPGA EARLY PORTING"
+	help
+	  Used for FPGA early porting to separate code segments between FPGA
+	  platform and non-FPGA platform.
+	  Say Y here if you are doing FPGA early porting.
+	  If unsure, say N
+endmenu # Misc

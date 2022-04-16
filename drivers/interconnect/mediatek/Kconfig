@@ -1,0 +1,71 @@
+config INTERCONNECT_MTK
+	bool "Mediatek Network-on-Chip interconnect drivers"
+	depends on ARCH_MEDIATEK
+	help
+	  Support for Mediatek's Network-on-Chip interconnect hardware.
+
+config INTERCONNECT_MTK_EMI
+	tristate "Mediatek EMI interconnect driver"
+	depends on INTERCONNECT_MTK
+	depends on (MTK_DVFSRC && OF)
+	help
+	  This is a driver for the Mediatek Network-on-Chip on DVFSRC-based
+	  platforms.
+
+config INTERCONNECT_MTK_MMQOS_COMMON
+	tristate "Mediatek MMQoS support"
+	select INTERCONNECT_MTK_EXTENSION
+	help
+	  Support for multimedia QoS in Mediatek's SoCs.
+	  The Mediatek MMQoS(Multimedia Quality of Service) Interconnect
+	  driver will collect BW requests from MM users, such as display,
+	  camera, mdp and video codec, and configure SMI settings dynamically
+	  according to the aggregated BW.
+
+config INTERCONNECT_MTK_MMQOS_MT6873
+	tristate "Mediatek MT6873 MMQoS interconnect driver"
+	depends on INTERCONNECT_MTK
+	depends on MTK_SMI
+	select INTERCONNECT_MTK_MMQOS_COMMON
+	help
+	  Support MT6873 multimedia QoS.
+
+config INTERCONNECT_MTK_MMQOS_MT6853
+	tristate "Mediatek MT6853 MMQoS interconnect driver"
+	depends on INTERCONNECT_MTK
+	depends on MTK_SMI
+	select INTERCONNECT_MTK_MMQOS_COMMON
+	help
+	  Support MT6853 multimedia QoS.
+
+config INTERCONNECT_MTK_MMQOS_MT6893
+	tristate "Mediatek MT6893 MMQoS interconnect driver"
+	depends on INTERCONNECT_MTK
+	depends on MTK_SMI
+	select INTERCONNECT_MTK_MMQOS_COMMON
+	help
+	  Support MT6893 multimedia QoS.
+
+config INTERCONNECT_MTK_MMQOS_MT6983
+	tristate "Mediatek MT6983 MMQoS interconnect driver"
+	depends on INTERCONNECT_MTK
+	depends on MTK_SMI
+	select INTERCONNECT_MTK_MMQOS_COMMON
+	help
+	  Support MT6983 multimedia QoS.
+
+config INTERCONNECT_MTK_MMQOS_MT6879
+	tristate "Mediatek MT6879 MMQoS interconnect driver"
+	depends on INTERCONNECT_MTK
+	depends on MTK_SMI
+	select INTERCONNECT_MTK_MMQOS_COMMON
+	help
+	  Support MT6879 multimedia QoS.
+
+config INTERCONNECT_MTK_MMQOS_MT6895
+	tristate "Mediatek MT6895 MMQoS interconnect driver"
+	depends on INTERCONNECT_MTK
+	depends on MTK_SMI
+	select INTERCONNECT_MTK_MMQOS_COMMON
+	help
+	  Support MT6895 multimedia QoS.

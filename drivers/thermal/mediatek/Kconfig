@@ -1,0 +1,119 @@
+config MTK_THERMAL
+	tristate "Mediatek thermal drivers"
+	depends on THERMAL_OF
+	help
+	  This is the option for Mediatek thermal software
+	  solutions. Please enable corresponding options to
+	  get temperature information from thermal sensors or
+	  turn on throttle mechaisms for thermal mitigation.
+
+if MTK_THERMAL
+
+config MTK_SOC_THERMAL
+	tristate "Temperature sensor driver for mediatek SoCs"
+	depends on HAS_IOMEM
+	depends on NVMEM
+	depends on RESET_CONTROLLER
+	help
+	  Enable this option if you want to get SoC temperature
+	  information for Mediatek platforms. This driver
+	  configures thermal controllers to collect temperature
+	  via AUXADC interface.
+
+config MTK_SOC_THERMAL_LVTS
+        tristate "LVTS (Low voltage thermal sensor) driver for Mediatek SoCs"
+        depends on HAS_IOMEM
+        depends on NVMEM
+        depends on RESET_TI_SYSCON
+        help
+          Enable this option if you want to get SoC temperature
+          information for Mediatek platforms. This driver
+          configures LVTS thermal controllers to collect temperatures
+          via ASIF interface.
+
+config MTK_BOARD_THERMAL
+	tristate "On-board NTC thermistor driver for Mediatek SoCs"
+	help
+	  Enable this option if you want to get PCB temperature
+	  via on-board NTC for Mediatek platforms.
+	  This driver reads the voltage value from TIA hardware
+	  which is responsible for reading all PMIC AUXADC channels
+	  sequentially. The address of TIA register for each channel
+	  and temperature convert table should be specified in
+	  device tree.
+
+config MTK_PMIC_THERMAL
+	tristate "PMIC thermal sensor driver for Mediatek SoCs"
+	depends on MT635X_EFUSE
+	depends on MEDIATEK_MT635X_AUXADC
+	help
+	  Enable this option if you want to get PMIC temperature
+	  for Mediatek platforms.
+	  This driver reads the voltage value from PMIC AUXADC channels,
+	  and converts raw value to PMIC temperature via PMIC efuse data.
+
+config MTK_MD_THERMAL
+	tristate "Mediatek Modem cooling framework"
+	depends on MTK_ECCCI_DRIVER
+	help
+	  Enable this option to turn on modem throttle mechanisms
+	  for Mediatek platforms.
+	  This option depends on MTK_ECCCI_DRIVER which is the
+	  IPC interface between AP SoC and modem.
+
+config MTK_CHARGER_THERMAL
+	tristate "Mediatek charger cooling framework"
+	depends on MTK_CHARGER
+	help
+	  Enable this option to turn on charger throttle mechanisms
+	  for Mediatek platforms.
+	  This option depends on MTK_CHARGER which is
+	  MTK charger driver.
+
+config MTK_BACKLIGHT_THERMAL
+	tristate "Mediatek backlight cooling framework"
+	depends on LEDS_MTK_PWM || LEDS_MTK_DISP
+	help
+	  Enable this option to turn on backlight throttle mechanisms
+	  for Mediatek platforms.
+	  This option depends on LEDS_MTK which is
+	  MTK leds driver.
+
+config MTK_THERMAL_TRACE
+	tristate "Mediatek thermal ftrace driver"
+	depends on FTRACE
+	depends on NET
+	help
+	  Enable this option if you want use ftrace for thermal
+	  driver debugging on Mediatek platforms.
+	  This driver creates trace points and a periodical timer
+	  for network throughput calculation.
+
+config MTK_THERMAL_IPI
+	tristate "Mediatek thermal IPI interface driver"
+	depends on MTK_TINYSYS_SSPM_SUPPORT || MTK_TINYSYS_MCUPM_SUPPORT
+	help
+	  Enable this option if you want to use and communicate
+	  with tinysys microprocessors for Mediatek platforms.
+	  This driver defines thermal ipi commands and provides an
+	  API to send a ipi command to tinysys microprocessors.
+
+config MTK_THERMAL_INTERFACE
+	tristate "Mediatek thermal interface driver"
+	help
+	  This driver provides the interface to get:
+	  1.CPU/GPU/xPU headroom from uP.
+	  2.thermal setting or policy from userspace daemon(ex:thermal policy and TTJ)
+	  This driver also offer API to get cpu theraml headroom for other kernel module.
+
+config MTK_THERMAL_JATM
+	tristate "Mediatek jank aware thermal management driver"
+	depends on MTK_THERMAL_INTERFACE
+	help
+	  This driver provides a algorithm to fine tune:
+	  1. TTJ
+	  2. CPU freq
+	  to optimize game UX under a proper Tskin control.
+	  It will take care of both better user experience and Tskin control.
+
+endif
