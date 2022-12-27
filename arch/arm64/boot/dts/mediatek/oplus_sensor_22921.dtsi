@@ -1,0 +1,78 @@
+&odm {
+	oplus_sensor:oplus_sensor {
+		compatible = "oplus,sensor-devinfo";
+		/* sensor start */
+		/*
+		enum {
+			LIS3DH,
+			LSM6DS3,
+			BMI160,
+			LIS2HH12,
+			LSM6DSM,
+			BMI2XY,
+			LSM6DSO,
+			BMA4XY,
+			SC7A20,
+			ICM4X6XX,
+			BMI220,
+		};
+		*/
+		gsensor_1: gsensor_1 {
+			status = "okay";
+			sensor_name = <10>;//bmi220
+			device_name = "bmi220";
+			i2c_num = <2>;
+			i2c_addr = <0>;
+			direction = <7>;
+			eint_num = <29>;
+			gyro_cali_version= <2>; //should be always v2 for lsm6dso
+			acc_cali_range= <200 200 200>;
+		};
+		/*
+		enum {
+			AKM09911,
+			MMC3530,
+			MMC5603,
+			MXG4300,
+		};
+		*/
+		msensor_1: msensor_1 {
+			status = "okay";
+			sensor_name = <2>;//MMC5603
+			i2c_num = <6>;
+			i2c_addr = <48>;
+			direction = <0>;
+			eint_num = <0>;
+			soft-mag-parameter = <9981 0 558 0 104 1 610 0 9452 0 147 1 14 1 319 1 10497 0>;
+		};
+		/*
+		enum {
+			STK37600,
+			MN29005,
+			TCS3408,
+		};
+		*/
+		rear_cct_1: rear_cct_1 {
+			status = "okay";
+			sensor_name = <2>;//TCS3408
+			i2c_num = <5>;
+			i2c_addr = <0x39>;
+			direction = <0>;
+			eint_num = <15>;
+			available_sensor = <7>; // bit 0: rear als, bit 1: rear cct, bit 2: rear flicker
+			gold_rear_cct_3k = <7028 3705 2058 11538 4450 1001>; // 3000k gold parameter
+			gold_rear_cct_6k = <4682 3965 2896 10654 3989 1001>;  // 6000k gold parameter
+			device_name = "tcs3408";
+		};
+
+		alsps_arch: alsps_arch {
+			status = "okay";
+			new-arch-supported = <1>;
+		};
+		cali_arch: cali_arch {
+			status = "okay";
+			new-arch-supported = <1>;
+		};
+	};
+/* sensor end */
+};

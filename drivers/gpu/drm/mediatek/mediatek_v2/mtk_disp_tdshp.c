@@ -52,7 +52,7 @@ static int mtk_disp_tdshp_write_reg(struct mtk_ddp_comp *comp,
 	struct DISP_TDSHP_REG *disp_tdshp_regs;
 
 	int ret = 0;
-	int id = index_of_tdshp(comp->id);
+	int id = 0;
 
 	if (lock)
 		mutex_lock(&g_tdshp_global_lock);
@@ -64,7 +64,7 @@ static int mtk_disp_tdshp_write_reg(struct mtk_ddp_comp *comp,
 		goto thshp_write_reg_unlock;
 	}
 
-	pr_notice("tdshp_en: %x, tdshp_limit: %x, tdshp_ylev_256: %x",
+	DDPINFO("tdshp_en: %x, tdshp_limit: %x, tdshp_ylev_256: %x",
 			disp_tdshp_regs->tdshp_en, disp_tdshp_regs->tdshp_limit,
 			disp_tdshp_regs->tdshp_ylev_256);
 
@@ -375,6 +375,7 @@ int mtk_drm_ioctl_tdshp_get_size(struct drm_device *dev, void *data,
 		struct drm_file *file_priv)
 {
 	struct drm_crtc *crtc;
+	struct mtk_drm_private *priv;
 	u32 width = 0, height = 0;
 	struct DISP_TDSHP_DISPLAY_SIZE *dst =
 			(struct DISP_TDSHP_DISPLAY_SIZE *)data;
@@ -384,6 +385,18 @@ int mtk_drm_ioctl_tdshp_get_size(struct drm_device *dev, void *data,
 	crtc = list_first_entry(&(dev)->mode_config.crtc_list,
 		typeof(*crtc), head);
 
+	if (IS_ERR_OR_NULL(crtc)) {
+	        DDPPR_ERR("find crtc fail\n");
+	        return -EINVAL;
+	}
+
+	priv = dev->dev_private;
+	if (IS_ERR_OR_NULL(priv)) {
+	        DDPPR_ERR("%s, invalid priv\n", __func__);
+	        return -EINVAL;
+	}
+
+	mutex_lock(&priv->commit.lock);
 	mtk_drm_crtc_get_panel_original_size(crtc, &width, &height);
 	if (width == 0 || height == 0) {
 		DDPFUNC("panel original size error(%dx%d).\n", width, height);
@@ -395,6 +408,7 @@ int mtk_drm_ioctl_tdshp_get_size(struct drm_device *dev, void *data,
 	g_tdshp_size.lcm_height = height;
 
 	disp_tdshp_wait_size(60);
+	mutex_unlock(&priv->commit.lock);
 
 	pr_notice("%s ---", __func__);
 	memcpy(dst, &g_tdshp_size, sizeof(g_tdshp_size));
@@ -410,10 +424,10 @@ static void mtk_disp_tdshp_config(struct mtk_ddp_comp *comp,
 
 	DDPINFO("line: %d\n", __LINE__);
 
-	if (cfg->bpc == 8)
+	if (cfg->source_bpc == 8)
 		cmdq_pkt_write(handle, comp->cmdq_base,
 			comp->regs_pa + DISP_TDSHP_CTRL, ((0x1 << 2) | 0x1), ~0);
-	else if (cfg->bpc == 10)
+	else if (cfg->source_bpc == 10)
 		cmdq_pkt_write(handle, comp->cmdq_base,
 			comp->regs_pa + DISP_TDSHP_CTRL, ((0x0 << 2) | 0x1), ~0);
 	else
@@ -632,6 +646,36 @@ void mtk_disp_tdshp_dump(struct mtk_ddp_comp *comp)
 	mtk_cust_dump_reg(baddr, 0x37C, 0x384, 0x388, 0x480);
 	mtk_cust_dump_reg(baddr, 0x484, 0x488, 0x48C, 0x490);
 	mtk_cust_dump_reg(baddr, 0x67C, -1, -1, -1);
+}
+
+void mtk_disp_tdshp_regdump(void)
+{
+	void __iomem *baddr = default_comp->regs;
+	int k;
+
+	DDPDUMP("== %s REGS:0x%x ==\n", mtk_dump_comp_str(default_comp), default_comp->regs_pa);
+	DDPDUMP("[%s REGS Start Dump]\n", mtk_dump_comp_str(default_comp));
+	for (k = 0; k <= 0x67c; k += 16) {
+		DDPDUMP("0x%04x: 0x%08x 0x%08x 0x%08x 0x%08x\n", k,
+			readl(baddr + k),
+			readl(baddr + k + 0x4),
+			readl(baddr + k + 0x8),
+			readl(baddr + k + 0xc));
+	}
+	DDPDUMP("[%s REGS End Dump]\n", mtk_dump_comp_str(default_comp));
+	if (default_comp->mtk_crtc->is_dual_pipe) {
+		baddr = tdshp1_default_comp->regs;
+		DDPDUMP("== %s REGS ==\n", mtk_dump_comp_str(tdshp1_default_comp));
+		DDPDUMP("[%s REGS Start Dump]\n", mtk_dump_comp_str(tdshp1_default_comp));
+		for (k = 0; k <= 0x67c; k += 16) {
+			DDPDUMP("0x%04x: 0x%08x 0x%08x 0x%08x 0x%08x\n", k,
+				readl(baddr + k),
+				readl(baddr + k + 0x4),
+				readl(baddr + k + 0x8),
+				readl(baddr + k + 0xc));
+		}
+		DDPDUMP("[%s REGS End Dump]\n", mtk_dump_comp_str(tdshp1_default_comp));
+	}
 }
 
 static int mtk_disp_tdshp_probe(struct platform_device *pdev)

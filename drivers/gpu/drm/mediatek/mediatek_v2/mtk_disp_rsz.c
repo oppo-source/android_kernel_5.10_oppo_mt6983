@@ -361,7 +361,7 @@ int mtk_rsz_dump(struct mtk_ddp_comp *comp)
 	void __iomem *baddr = comp->regs;
 	int i = 0;
 
-	DDPDUMP("== DISP %s REGS:0x%x ==\n", mtk_dump_comp_str(comp), comp->regs_pa);
+	DDPDUMP("== DISP %s REGS:0x%llx ==\n", mtk_dump_comp_str(comp), comp->regs_pa);
 	for (i = 0; i < 3; i++) {
 		DDPDUMP("0x%03X: 0x%08x 0x%08x 0x%08x 0x%08x\n", i * 0x10,
 			readl(baddr + i * 0x10), readl(baddr + i * 0x10 + 0x4),
@@ -398,7 +398,7 @@ int mtk_rsz_analysis(struct mtk_ddp_comp *comp)
 	in_pos = readl(baddr + DISP_REG_RSZ_DEBUG);
 	shadow = readl(baddr + DISP_REG_RSZ_SHADOW_CTRL);
 
-	DDPDUMP("== DISP %s ANALYSIS:0x%x ==\n", mtk_dump_comp_str(comp), comp->regs_pa);
+	DDPDUMP("== DISP %s ANALYSIS:0x%llx ==\n", mtk_dump_comp_str(comp), comp->regs_pa);
 
 	writel(0x3, baddr + DISP_REG_RSZ_DEBUG_SEL);
 	n = snprintf(msg, LEN,
@@ -567,6 +567,18 @@ static int mtk_disp_rsz_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const struct mtk_disp_rsz_data mt6765_rsz_driver_data = {
+	.tile_length = 736, .in_max_height = 4096,
+	.support_shadow = false,
+	.need_bypass_shadow = false,
+};
+
+static const struct mtk_disp_rsz_data mt6768_rsz_driver_data = {
+	.tile_length = 736, .in_max_height = 4096,
+	.support_shadow = false,
+	.need_bypass_shadow = false,
+};
+
 static const struct mtk_disp_rsz_data mt6779_rsz_driver_data = {
 	.tile_length = 1088, .in_max_height = 4096,
 	.support_shadow = false,
@@ -622,6 +634,10 @@ static const struct mtk_disp_rsz_data mt6895_rsz_driver_data = {
 };
 
 static const struct of_device_id mtk_disp_rsz_driver_dt_match[] = {
+	{.compatible = "mediatek,mt6765-disp-rsz",
+	 .data = &mt6765_rsz_driver_data},
+	{.compatible = "mediatek,mt6768-disp-rsz",
+	 .data = &mt6768_rsz_driver_data},
 	{.compatible = "mediatek,mt6779-disp-rsz",
 	 .data = &mt6779_rsz_driver_data},
 	{.compatible = "mediatek,mt6885-disp-rsz",

@@ -5862,13 +5862,43 @@ core_initcall(regulator_init);
 static int regulator_late_cleanup(struct device *dev, void *data)
 {
 	struct regulator_dev *rdev = dev_to_rdev(dev);
-	const struct regulator_ops *ops = rdev->desc->ops;
 	struct regulation_constraints *c = rdev->constraints;
-	int enabled, ret;
+	int ret;
 
 	if (c && c->always_on)
 		return 0;
 
+/* zhaoyihu@realme.com skip ldo cleanup for 20730/20731/20732/20733 */
+	if(strcmp(rdev->desc->name,"LDO3") == 0){
+		/* ldo1 is enable in lk, kernel enable this ldo1 to protect from unbalanced enable/disable */
+		struct regulator *ldo3;//VCI 3.0V
+		ldo3 = regulator_get(dev, "VMC");
+		if(!IS_ERR(ldo3))
+			regulator_enable(ldo3);
+		rdev_info(rdev,"LDO3 is used for LCM ,can't clean up.\n");
+		return 0;
+	}
+/* #ifdef OPLUS_FEATURE_DISPLAY */
+	if(strcmp(rdev->desc->name,"VMC") == 0){
+		/* VMC is enable in lk, kernel enable this ldo1 to protect from unbalanced enable/disable */
+		struct regulator *vmc3p0;//VCI 3.0V
+		vmc3p0 = regulator_get(dev, "3p0");
+		if(!IS_ERR(vmc3p0))
+			regulator_enable(vmc3p0);
+		rdev_info(rdev,"vmc3p0 is used for LCM ,can't clean up.\n");
+		return 0;
+	}
+
+	if(strcmp(rdev->desc->name,"VRF18_AIF") == 0){
+		/* VRF18_AIF is enable in lk, kernel enable this ldo1 to protect from unbalanced enable/disable */
+		struct regulator *vrf1p8;//VCI 1p8V
+		vrf1p8 = regulator_get(dev, "1p8");
+		if(!IS_ERR(vrf1p8))
+			regulator_enable(vrf1p8);
+		rdev_info(rdev,"vrf1p8 is used for LCM ,can't clean up.\n");
+		return 0;
+	}
+/* #endif */
 	if (!regulator_ops_is_valid(rdev, REGULATOR_CHANGE_STATUS))
 		return 0;
 
@@ -5877,14 +5907,8 @@ static int regulator_late_cleanup(struct device *dev, void *data)
 	if (rdev->use_count)
 		goto unlock;
 
-	/* If we can't read the status assume it's always on. */
-	if (ops->is_enabled)
-		enabled = ops->is_enabled(rdev);
-	else
-		enabled = 1;
-
-	/* But if reading the status failed, assume that it's off. */
-	if (enabled <= 0)
+	/* If reading the status failed, assume that it's off. */
+	if (_regulator_is_enabled(rdev) <= 0)
 		goto unlock;
 
 	if (have_full_constraints()) {

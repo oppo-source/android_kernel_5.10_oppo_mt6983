@@ -10,6 +10,14 @@
 #include "common.h"
 #include <linux/stop_machine.h>
 #include <linux/kthread.h>
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+#include <../kernel/oplus_cpu/sched/sched_assist/sa_fair.h>
+#include <../kernel/oplus_cpu/sched/sched_assist/sa_common.h>
+#endif
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+#include <../kernel/oplus_cpu/sched/frame_boost/frame_group.h>
+#endif
+
 #if IS_ENABLED(CONFIG_MTK_THERMAL_INTERFACE)
 #include <thermal_interface.h>
 #endif
@@ -303,9 +311,11 @@ mtk_compute_energy(struct task_struct *p, int dst_cpu, struct perf_domain *pd)
 		trace_sched_energy_util(dst_cpu, max_util_cur, sum_util_cur, cpu, util_cfs_cur,
 				util_cfs_energy_cur, cpu_util_cur);
 
+#if IS_ENABLED(CONFIG_MTK_THERMAL_INTERFACE)
 		/* get temperature for each cpu*/
 		cpu_temp[cpu] = get_cpu_temp(cpu);
 		cpu_temp[cpu] /= 1000;
+#endif
 	}
 
 	energy_base = mtk_em_cpu_energy(pd->em_pd, max_util_base, sum_util_base, cpu_temp);
@@ -396,8 +406,17 @@ void mtk_find_energy_efficient_cpu(void *data, struct task_struct *p, int prev_c
 	rcu_read_lock();
 	if (!uclamp_min_ls)
 		latency_sensitive = uclamp_latency_sensitive(p);
-	else
-		latency_sensitive = p->uclamp_req[UCLAMP_MIN].value > 0 ? 1 : 0;
+	else {
+		latency_sensitive = (p->uclamp_req[UCLAMP_MIN].value > 0 ? 1 : 0) ||
+					uclamp_latency_sensitive(p);
+	}
+
+/* TODO: remove these codes ASAP AUDIO_THREAD_OPTTIMIZE */
+#define AUDIO_THREAD_OPTTIMIZE
+#ifdef AUDIO_THREAD_OPTTIMIZE
+	if (!latency_sensitive && is_optimized_audio_thread(p))
+		latency_sensitive = true;
+#endif /* AUDIO_THREAD_OPTTIMIZE */
 
 	pd = rcu_dereference(rd->pd);
 	if (!pd || READ_ONCE(rd->overutilized)) {
@@ -447,6 +466,14 @@ void mtk_find_energy_efficient_cpu(void *data, struct task_struct *p, int prev_c
 #endif
 
 			if (!cpumask_test_cpu(cpu, p->cpus_ptr))
+				continue;
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+			if (should_ux_task_skip_cpu(p, cpu))
+				continue;
+#endif
+
+			if (cpu_rq(cpu)->rt.rt_nr_running >= 1)
 				continue;
 
 			util = cpu_util_next(cpu, p, cpu);
@@ -576,6 +603,16 @@ fail:
 
 	*new_cpu = -1;
 done:
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	if (set_frame_group_task_to_perfer_cpu(p, new_cpu))
+		select_reason = LB_FBT_PREFER;
+#endif
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+	if (set_ux_task_to_prefer_cpu(p, new_cpu)) {
+		select_reason = LB_UX_PREFER;
+	}
+#endif
 	trace_sched_find_energy_efficient_cpu(best_delta, best_energy_cpu,
 			best_idle_cpu, idle_max_spare_cap_cpu, sys_max_spare_cap_cpu);
 	trace_sched_select_task_rq(p, select_reason, prev_cpu, *new_cpu,
@@ -609,12 +646,29 @@ static struct task_struct *detach_a_hint_task(struct rq *src_rq, int dst_cpu)
 		if (task_running(src_rq, p))
 			continue;
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+		if (should_ux_task_skip_cpu(p, dst_cpu))
+			continue;
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+		if (fbg_skip_migration(p, cpu_of(src_rq), dst_cpu))
+			continue;
+#endif
 		task_util = uclamp_task_util(p);
 
 		if (!uclamp_min_ls)
 			latency_sensitive = uclamp_latency_sensitive(p);
-		else
-			latency_sensitive = p->uclamp_req[UCLAMP_MIN].value > 0 ? 1 : 0;
+		else {
+			latency_sensitive = (p->uclamp_req[UCLAMP_MIN].value > 0 ? 1 : 0) ||
+						uclamp_latency_sensitive(p);
+		}
+
+/* TODO: remove these codes ASAP AUDIO_THREAD_OPTTIMIZE */
+#ifdef AUDIO_THREAD_OPTTIMIZE
+		if (!latency_sensitive && is_optimized_audio_thread(p))
+			latency_sensitive = true;
+#endif /* AUDIO_THREAD_OPTTIMIZE */
 
 		if (latency_sensitive &&
 			task_util <= dst_capacity) {
@@ -642,8 +696,10 @@ inline bool is_task_latency_sensitive(struct task_struct *p)
 	rcu_read_lock();
 	if (!uclamp_min_ls)
 		latency_sensitive = uclamp_latency_sensitive(p);
-	else
-		latency_sensitive = p->uclamp_req[UCLAMP_MIN].value > 0 ? 1 : 0;
+	else {
+		latency_sensitive = (p->uclamp_req[UCLAMP_MIN].value > 0 ? 1 : 0) ||
+					uclamp_latency_sensitive(p);
+	}
 	rcu_read_unlock();
 
 	return latency_sensitive;

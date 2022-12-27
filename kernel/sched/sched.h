@@ -1079,6 +1079,7 @@ struct rq {
 #endif
 
 	ANDROID_VENDOR_DATA_ARRAY(1, 96);
+	/* Please add your member in struct oplus_rq */
 	ANDROID_OEM_DATA_ARRAY(1, 16);
 
 	ANDROID_KABI_RESERVE(1);
@@ -1191,6 +1192,16 @@ static inline u64 rq_clock_task(struct rq *rq)
 	assert_clock_updated(rq);
 
 	return rq->clock_task;
+}
+
+DECLARE_PER_CPU(u64, clock_task_mult);
+
+static inline u64 rq_clock_task_mult(struct rq *rq)
+{
+	lockdep_assert_held(&rq->lock);
+	assert_clock_updated(rq);
+
+	return per_cpu(clock_task_mult, rq->cpu);
 }
 
 /**
