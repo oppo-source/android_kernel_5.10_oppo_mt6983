@@ -28,7 +28,9 @@ android/abi_gki_aarch64_unisoc
 android/abi_gki_aarch64_virtual_device
 android/abi_gki_aarch64_vivo
 android/abi_gki_aarch64_xiaomi
+android/abi_gki_aarch64_oplus_internal
 android/abi_gki_aarch64_asus
+android/abi_gki_aarch64_transsion
 "
 
 FILES="${FILES}
