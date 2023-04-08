@@ -46,6 +46,8 @@ extern int oplus_display_get_dp_support(void *buf);
 extern int oplus_display_set_limit_fps(void *buf);
 extern int oplus_display_panel_get_pq_trigger(void *buf);
 extern int oplus_display_panel_set_pq_trigger(void *buf);
+extern int oplus_display_panel_set_pwm_status(void *buf);
+extern int oplus_display_panel_get_pwm_status(void *buf);
 
 static const struct panel_ioctl_desc panel_ioctls[] = {
 	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_POWER, oplus_display_panel_set_pwr),
@@ -105,6 +107,8 @@ static const struct panel_ioctl_desc panel_ioctls[] = {
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_PQ_TRIGGER, oplus_display_panel_get_pq_trigger),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_FP_TYPE, oplus_ofp_set_fp_type),
 	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_FP_TYPE, oplus_ofp_get_fp_type),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_SET_PWM_STATUS, oplus_display_panel_set_pwm_status),
+	PANEL_IOCTL_DEF(PANEL_IOCTL_GET_PWM_STATUS, oplus_display_panel_get_pwm_status),
 };
 
 static int panel_open(struct inode *inode, struct file *filp)

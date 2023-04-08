@@ -32,6 +32,16 @@ enum wl2868c_regulator_ids {
     WL2868C_LDO7,
 };
 
+enum wl28681c_regulator_ids {
+    WL28681C_LDO1,
+    WL28681C_LDO2,
+    WL28681C_LDO3,
+    WL28681C_LDO4,
+    WL28681C_LDO5,
+    WL28681C_LDO6,
+    WL28681C_LDO7,
+};
+
 typedef enum {
     FAN53870_PRODUCT_ID = 0x00,
     FAN53870_SILICON_REV,
@@ -61,6 +71,21 @@ typedef enum {
     WL2868C_ENABLE = 0x0e,
     WL2868C_REG_MAX = 0x25,
 } multi_reg_wl2868_registers_t;
+
+typedef enum {
+    WL28681C_PRODUCT_ID = 0x00,
+    WL28681C_SILICON_REV,
+    WL28681C_IOUT,
+    WL28681C_ENABLE,
+    WL28681C_LDO1VOUT,
+    WL28681C_LDO2VOUT,
+    WL28681C_LDO3VOUT,
+    WL28681C_LDO4VOUT,
+    WL28681C_LDO5VOUT,
+    WL28681C_LDO6VOUT,
+    WL28681C_LDO7VOUT,
+    WL28681C_REG_MAX = 0x0d,
+} multi_reg_wl28681c_registers_t;
 
 #define MULTI_REG_MAX_REG (WL2868C_REG_MAX)
 
@@ -157,6 +182,47 @@ static const struct regulator_ops multi_reg_ops = {
         .ops =           &multi_reg_ops,            \
     }
 
+#define WL28681C_NLDO(_num, _supply, _default)                \
+    [WL28681C_LDO ## _num] = {                    \
+        .name =           "ONLDO"#_num,            \
+        .of_match =       of_match_ptr("ONLDO"#_num),        \
+        .regulators_node = of_match_ptr("regulators"),        \
+        .type =           REGULATOR_VOLTAGE,            \
+        .owner =       THIS_MODULE,                \
+        .linear_ranges =   (struct linear_range[]) {        \
+              REGULATOR_LINEAR_RANGE(_default, 0, 0x3C, 0),    \
+              REGULATOR_LINEAR_RANGE(496000, 0x3D, 0xFF, 8000),    \
+        },                            \
+        .n_linear_ranges = 2,                    \
+        .vsel_reg =       WL28681C_LDO ## _num ## VOUT,    \
+        .vsel_mask =       0xff,                \
+        .enable_reg =       WL28681C_ENABLE,            \
+        .enable_mask =       BIT(_num - 1),            \
+        .enable_time =       150,                    \
+        .supply_name =       _supply,                \
+        .ops =           &multi_reg_ops,            \
+    }
+
+#define WL28681C_PLDO(_num, _supply, _default)                \
+    [WL28681C_LDO ## _num] = {                    \
+        .name =           "ONLDO"#_num,                \
+        .of_match =       of_match_ptr("ONLDO"#_num),        \
+        .regulators_node = of_match_ptr("regulators"),        \
+        .type =           REGULATOR_VOLTAGE,            \
+        .owner =       THIS_MODULE,                \
+        .linear_ranges =   (struct linear_range[]) {        \
+              REGULATOR_LINEAR_RANGE(1372000, 0x00, 0xff, 8000),    \
+        },                            \
+        .n_linear_ranges = 1,                    \
+        .vsel_reg =       WL28681C_LDO ## _num ## VOUT,    \
+        .vsel_mask =       0xff,                \
+        .enable_reg =       WL28681C_ENABLE,            \
+        .enable_mask =       BIT(_num - 1),            \
+        .enable_time =       150,                    \
+        .supply_name =       _supply,                \
+        .ops =           &multi_reg_ops,            \
+    }
+
 static struct regulator_desc multi_reg_fan53870_regulators[] = {
     FAN53870_NLDO(1, "vin12", 809000),
     FAN53870_NLDO(2, "vin12", 1049000),
@@ -177,6 +243,15 @@ static struct regulator_desc multi_reg_wl2868_regulators[] = {
     WL2868C_PLDO(7, "vin7", 2800000),
 };
 
+static struct regulator_desc multi_reg_wl28681c_regulators[] = {
+    WL28681C_NLDO(1, "vin12", 1000000),
+    WL28681C_NLDO(2, "vin12", 1000000),
+    WL28681C_PLDO(3, "vin34", 1700000),
+    WL28681C_PLDO(4, "vin34", 1700000),
+    WL28681C_PLDO(5, "vin5", 1700000),
+    WL28681C_PLDO(6, "vin6", 1700000),
+    WL28681C_PLDO(7, "vin7", 1700000),
+};
 typedef struct {
     int mult_reg_slave_id;
     int product_id_reg;
@@ -200,6 +275,13 @@ static mult_reg_dev_info_t dev_info[] = {
      .product_id = 0x01,
      .reg_desc = &multi_reg_fan53870_regulators[0],
      .reg_desc_size = ARRAY_SIZE(multi_reg_fan53870_regulators),
+    },
+    /*wl28681c*/
+    {.mult_reg_slave_id = 0x35,
+     .product_id_reg = WL28681C_PRODUCT_ID,
+     .product_id = 0x0D,
+     .reg_desc = &multi_reg_wl28681c_regulators[0],
+     .reg_desc_size = ARRAY_SIZE(multi_reg_wl28681c_regulators),
     },
     /*Ivalid*/
     {0xff},
@@ -259,7 +341,7 @@ static int multi_reg_i2c_probe(struct i2c_client *i2c,
         }
     }
 
-    /*process the fan53870 and wl2868 IC*/
+    /*process the fan53870 wl2868 wl28681c IC*/
     pdata->regmap = devm_regmap_init_i2c(i2c, &multi_reg_regmap);
     if (IS_ERR(pdata->regmap)) {
         ret = PTR_ERR(pdata->regmap);
@@ -307,8 +389,7 @@ static int multi_reg_i2c_probe(struct i2c_client *i2c,
                 multi_reg_regulators[i].name, ret);
             return ret;
         }
-        dev_info(&i2c->dev, "register regulator ldo %s ok, ret:%d\n",
-            multi_reg_regulators[i].name, ret);
+        dev_info(&i2c->dev, "register regulator ldo %s ok\n", multi_reg_regulators[i].name);
     }
     dev_info(&i2c->dev, "regulator probe end\n");
     return 0;

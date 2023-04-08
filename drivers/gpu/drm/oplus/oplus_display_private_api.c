@@ -78,6 +78,10 @@ EXPORT_SYMBOL(esd_mode);
 unsigned int seed_mode = 0;
 extern int mtk_crtc_osc_freq_switch(struct drm_crtc *crtc, unsigned int en, unsigned int userdata);
 unsigned long osc_mode = 0;
+extern int mtk_crtc_set_high_pwm_switch(struct drm_crtc *crtc, unsigned int en);
+unsigned int hpwm_mode = 0;
+EXPORT_SYMBOL(hpwm_mode);
+
 unsigned int oplus_display_brightness = 0;
 
 bool pq_trigger = true;
@@ -97,8 +101,9 @@ unsigned int m_db;
 unsigned int m_dc;
 bool g_dp_support;
 int lcm_id2 = 0;
+int lcm_id1 = 0;
 EXPORT_SYMBOL(lcm_id2);
-
+EXPORT_SYMBOL(lcm_id1);
 
 
 bool oplus_fp_notify_down_delay = false;
@@ -470,7 +475,7 @@ int panel_serial_number_read(struct drm_crtc *crtc, char cmd, int num)
 	pr_err("[oplus]%s Get panel serial number=[0x%llx]\n", __func__, serial_number);
 	mtk_read_ddic_v2(0xDA, 5, para);
 	m_da = para[0] & 0xFF;
-
+	lcm_id1 = m_da;
 	mtk_read_ddic_v2(0xDB, 5, para);
 	m_db = para[0] & 0xFF;
 	lcm_id2 = m_db;
@@ -717,6 +722,39 @@ static ssize_t oplus_display_set_pq_trigger(struct kobject *obj,
 
         return count;
 }
+
+static ssize_t oplus_display_get_high_pwm(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+        printk(KERN_INFO "high pwm mode = %d\n", hpwm_mode);
+
+        return sprintf(buf, "%d\n", hpwm_mode);
+}
+
+static ssize_t oplus_display_set_high_pwm(struct kobject *kobj,
+                struct kobj_attribute *attr,
+                const char *buf, size_t count) {
+	struct drm_crtc *crtc;
+	unsigned int temp_save = 0;
+	int ret = 0;
+	struct drm_device *ddev = get_drm_device();
+
+	ret = kstrtouint(buf, 10, &temp_save);
+	printk(KERN_INFO "pwm_turbo mode = %d\n", temp_save);
+
+	crtc = list_first_entry(&(ddev)->mode_config.crtc_list,
+				typeof(*crtc), head);
+	if (!crtc) {
+		printk(KERN_ERR "find crtc fail\n");
+		return 0;
+	}
+
+	mtk_crtc_set_high_pwm_switch(crtc, temp_save);
+	hpwm_mode = temp_save;
+
+	return count;
+}
+
 int oplus_dc_threshold = 260;
 int oplus_panel_alpha = 0;
 int oplus_underbrightness_alpha = 0;
@@ -1374,6 +1412,7 @@ static OPLUS_ATTR(dimlayer_bl_en, S_IRUGO|S_IWUSR, oplus_display_get_dc_enable, 
 static OPLUS_ATTR(dim_dc_alpha, S_IRUGO|S_IWUSR, oplus_display_get_dim_dc_alpha, oplus_display_set_dim_dc_alpha);
 static OPLUS_ATTR(osc, S_IRUGO|S_IWUSR, oplus_display_get_osc, oplus_display_set_osc);
 static OPLUS_ATTR(pq_trigger, S_IRUGO|S_IWUSR, oplus_display_get_pq_trigger, oplus_display_set_pq_trigger);
+static OPLUS_ATTR(pwm_turbo, S_IRUGO|S_IWUSR, oplus_display_get_high_pwm, oplus_display_set_high_pwm);
 
 EXPORT_SYMBOL(seed_mode);
 EXPORT_SYMBOL(oplus_max_normal_brightness);
@@ -1422,6 +1461,7 @@ static struct attribute *oplus_display_attrs[] = {
 	&oplus_attr_dim_dc_alpha.attr,
 	&oplus_attr_osc.attr,
 	&oplus_attr_pq_trigger.attr,
+	&oplus_attr_pwm_turbo.attr,
 	NULL,	/* need to NULL terminate the list of attributes */
 };
 

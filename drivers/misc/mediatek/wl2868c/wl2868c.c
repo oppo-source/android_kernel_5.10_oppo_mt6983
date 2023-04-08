@@ -19,12 +19,13 @@ WL2868C Interface is in vnd\kernel-5.10\drivers\misc\mediatek\imgsensor\src\comm
 */
 
 #include "wl2868c.h"
+#include <soc/oplus/system/oplus_project.h>
 
 /*****************************************************************************
  * Static Var
  *****************************************************************************/
 static int ldo_id = 0;
-static int power_reference_counts[] = {0,0,0,0,0,0,0,0};
+static int power_reference_counts[] = {0,0,1,0,0,0,0,0};
 static struct i2c_device which_ldo_chip[] = {
     //ldo i2c addr,         chip id addr,           chip id,             enable addr,
     {WL2868C_LDO_I2C_ADDR,  WL2868C_CHIP_REV_ADDR,  CAMERA_LDO_WL2868C,  WL2868C_LDO_EN_ADDR},
@@ -527,6 +528,11 @@ static int wl2868c_i2c_probe(struct i2c_client *client, const struct i2c_device_
     if (NULL == client) {
         WL2868C_PRINT("[wl2868c] i2c_client is NULL\n");
         return -1;
+    }
+
+    if (is_project(22281) || is_project(22282) || is_project(22283)) {
+        power_reference_counts[2] = 0;
+        WL2868C_PRINT("[wl2868c]match project changzheng\n");
     }
 
     wl2868c_gpio_select_state(WL2868C_GPIO_STATE_RST1);

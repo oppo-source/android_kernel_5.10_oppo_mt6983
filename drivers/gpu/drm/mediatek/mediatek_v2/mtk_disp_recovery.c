@@ -35,6 +35,10 @@
 #include "mtk_drm_mmp.h"
 #include "mtk_drm_trace.h"
 
+//#ifdef OPLUS_FEATURE_DISPLAY
+#include "oplus_display_temperature.h"
+//#endif /* OPLUS_FEATURE_DISPLAY */
+
 #define ESD_TRY_CNT 5
 //#ifndef OPLUS_FEATURE_ESD
 //#define ESD_CHECK_PERIOD 2000 /* ms */
@@ -245,6 +249,10 @@ int _mtk_esd_check_read(struct drm_crtc *crtc)
 		cmdq_pkt_clear_event(cmdq_handle,
 				     mtk_crtc->gce_obj.event[EVENT_CABC_EOF]);
 		//#endif
+
+//#ifdef OPLUS_FEATURE_DISPLAY
+		oplus_display_temp_check(output_comp, cmdq_handle);
+//#endif /* OPLUS_FEATURE_DISPLAY */
 
 		mtk_ddp_comp_io_cmd(output_comp, cmdq_handle, ESD_CHECK_READ,
 				    (void *)mtk_crtc);
@@ -663,7 +671,7 @@ static int mtk_drm_esd_check_worker_kthread(void *data)
 	unsigned int crtc_idx;
 
 //#ifdef OPLUS_FEATURE_DISPLAY
-		struct mtk_ddp_comp *comp;
+		struct mtk_ddp_comp *comp = NULL;
 		bool is_doze_mode = false;
 //#endif
 
@@ -681,6 +689,18 @@ static int mtk_drm_esd_check_worker_kthread(void *data)
 	crtc_idx = drm_crtc_index(crtc);
 
 	while (1) {
+//#ifdef OPLUS_FEATURE_DISPLAY
+		if (mtk_crtc->panel_ext->params->use_free_pointer_check) {
+			DDPINFO("[ESD]mtk_drm_esd_check_worker_kthread use-after-free check\n");
+			if (crtc_idx) {
+				continue;
+			}
+			comp = mtk_ddp_comp_request_output(mtk_crtc);
+			if (!(comp->funcs) || !(crtc->state)) {
+				continue;
+			}
+		}
+//#endif
 		msleep(ESD_CHECK_PERIOD);
 		//#ifndef OPLUS_FEATURE_ESD
 		/*ret = wait_event_interruptible(
@@ -783,6 +803,19 @@ static int mtk_drm_esd_check_worker_kthread(void *data)
 			msleep(ESD_CHECK_PERIOD/2);
 			atomic_set(&esd_ctx->target_flag, 0);
 			DDPDBG("[ESD] %d, target_flag:%d\n", __LINE__,atomic_read(&esd_ctx->target_flag));
+			//#ifdef OPLUS_FEATURE_DISPLAY
+			if (mtk_crtc && mtk_crtc->panel_ext && mtk_crtc->panel_ext->params &&
+					mtk_crtc->panel_ext->params->esd_check_aod_status_again_skip == 1) {
+				if (crtc->state && crtc->state->enable) {
+					comp->funcs->io_cmd(comp, NULL, DSI_GET_AOD_STATE, &is_doze_mode);
+					pr_err("[ESD]check again doze mode=%d\n", is_doze_mode);
+					if (is_doze_mode) {
+							pr_err("[ESD] is in aod doze mode, again skip esd check!\n");
+							continue;
+					}
+				}
+			}
+			//#endif
 		}
 		/* #endif */
 

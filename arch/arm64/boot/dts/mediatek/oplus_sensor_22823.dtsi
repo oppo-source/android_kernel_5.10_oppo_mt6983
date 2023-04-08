@@ -14,6 +14,9 @@
 		status = "okay";
 		pwm-num = <3>;
 	};
+	ssc_interactive: ssc_interactive {
+		report_brightness = <1>;
+	};
 	oplus_sensor:oplus_sensor {
 		compatible = "oplus,sensor-devinfo";
 		als-row-coe = <1000>;
@@ -103,7 +106,7 @@
 			force_cali_limit = <2000>;
 			cali_jitter_limit = <30>;
 			cal_offset_margin = <120>;
-			sensor-reg = <0xBB 0x01 0xB9 0x15 0xBC 0xFF>;
+			sensor-reg = <0xBB 0x01 0xB9 0x21 0xBC 0xFF>;
 		};
 		light_1: light_1 {
 			status = "okay";
@@ -151,12 +154,12 @@
 			direction = <0>;
 			eint_num = <3>;
 			channel_num = <3>;
-			channel_0_min = <0>;
-			channel_0_max = <70000>;
-			channel_1_min = <0>;
-			channel_1_max = <70000>;
-			channel_2_min = <0>;
-			channel_2_max = <70000>;
+			channel_0_min = <4232>;
+			channel_0_max = <6349>;
+			channel_1_min = <3414>;
+			channel_1_max = <5121>;
+			channel_2_min = <688>;
+			channel_2_max = <1033>;
 			channel_3_min = <0>;
 			channel_3_max = <70000>;
 			reg_table_num = <4>;

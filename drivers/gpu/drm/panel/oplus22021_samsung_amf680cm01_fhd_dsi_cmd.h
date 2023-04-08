@@ -540,7 +540,7 @@ struct LCM_setting_table aod_on_cmd[] = {
 	{REGFLAG_CMD, 3, {0xF1, 0x5A, 0x5A}},
 	{REGFLAG_CMD, 3, {0xFC, 0x5A, 0x5A}},
 
-	/* {REGFLAG_CMD, 1, {0x28}}, */
+	{REGFLAG_CMD, 1, {0x28}},
 	{REGFLAG_DELAY, 9, {}},
 	/* AOD Mode On */
 	{REGFLAG_CMD, 2, {0x53, 0x24}},
@@ -554,7 +554,7 @@ struct LCM_setting_table aod_on_cmd[] = {
 	{REGFLAG_CMD, 2, {0xF7, 0x0F}},
 
 	{REGFLAG_DELAY, 17, {}},
-	/* {REGFLAG_CMD, 1, {0x29}}, */
+	{REGFLAG_CMD, 1, {0x29}},
 
 	{REGFLAG_CMD, 3, {0xF0, 0xA5, 0xA5}},
 	{REGFLAG_CMD, 3, {0xF1, 0xA5, 0xA5}},

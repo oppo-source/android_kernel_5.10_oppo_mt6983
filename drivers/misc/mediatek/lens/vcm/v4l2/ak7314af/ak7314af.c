@@ -121,7 +121,8 @@ static int ak7314af_release(struct ak7314af_device *ak7314af)
 static int ak7314af_init(struct ak7314af_device *ak7314af)
 {
 	struct i2c_client *client = v4l2_get_subdevdata(&ak7314af->sd);
-	int ret = 0;
+	int ret = 0, val = 0;
+	static bool first_open = true;
 
 	LOG_INF("+\n");
 
@@ -135,6 +136,14 @@ static int ak7314af_init(struct ak7314af_device *ak7314af)
 	/* 00:active mode , 10:Standby mode , x1:Sleep mode */
 	ret = i2c_smbus_write_byte_data(client, 0x02, 0x00);
 
+	val = ak7314af->focus->val;
+	ak7314af_set_position(ak7314af, val);
+	if (first_open)
+	{
+		val = AK7314AF_ACTIVE_CODE;
+		ak7314af_set_position(ak7314af, val);
+		first_open = false;
+	}
 	LOG_INF("-\n");
 
 	return 0;

@@ -9,3 +9,5 @@ obj-$(CONFIG_MTK_HF_TEST_CASE) += test/
 obj-y += oplus_sensor_devinfo/
 obj-y += oplus_sensor_feedback/
 obj-y += oplus_consumer_ir/
+obj-y += oplus_ssc_interact/
+

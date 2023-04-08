@@ -2789,6 +2789,7 @@
   __traceiter_android_vh_cpu_idle_enter
   __traceiter_android_vh_cpu_idle_exit
   __traceiter_android_vh_cpu_up
+  __traceiter_android_vh_check_page_look_around_ref
   __traceiter_android_vh_del_page_from_lrulist
   __traceiter_android_vh_do_page_trylock
   __traceiter_android_vh_do_send_sig_info
@@ -2818,6 +2819,8 @@
   __traceiter_android_vh_jiffies_update
   __traceiter_android_vh_kmalloc_slab
   __traceiter_android_vh_logbuf
+  __traceiter_android_vh_look_around
+  __traceiter_android_vh_look_around_migrate_page
   __traceiter_android_vh_mark_page_accessed
   __traceiter_android_vh_mem_cgroup_alloc
   __traceiter_android_vh_mem_cgroup_css_offline
@@ -2908,6 +2911,7 @@
   __traceiter_suspend_resume
   __traceiter_task_newtask
   __traceiter_task_rename
+  __traceiter_android_vh_test_clear_look_around_ref
   __traceiter_xhci_urb_giveback
   __tracepoint_android_rvh_account_irq
   __tracepoint_android_rvh_after_enqueue_task
@@ -3019,6 +3023,7 @@
   __tracepoint_android_vh_cpu_idle_enter
   __tracepoint_android_vh_cpu_idle_exit
   __tracepoint_android_vh_cpu_up
+  __tracepoint_android_vh_check_page_look_around_ref
   __tracepoint_android_vh_del_page_from_lrulist
   __tracepoint_android_vh_do_page_trylock
   __tracepoint_android_vh_do_send_sig_info
@@ -3048,6 +3053,8 @@
   __tracepoint_android_vh_jiffies_update
   __tracepoint_android_vh_kmalloc_slab
   __tracepoint_android_vh_logbuf
+  __tracepoint_android_vh_look_around
+  __tracepoint_android_vh_look_around_migrate_page
   __tracepoint_android_vh_mark_page_accessed
   __tracepoint_android_vh_mem_cgroup_alloc
   __tracepoint_android_vh_mem_cgroup_css_offline
@@ -3109,6 +3116,7 @@
   __tracepoint_android_vh_tune_inactive_ratio
   __tracepoint_android_vh_tune_scan_type
   __tracepoint_android_vh_tune_swappiness
+  __tracepoint_android_vh_test_clear_look_around_ref
   __tracepoint_android_vh_ufs_compl_command
   __tracepoint_android_vh_ufs_send_command
   __tracepoint_android_vh_ufs_send_tm_command

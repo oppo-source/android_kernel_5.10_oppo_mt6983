@@ -201,6 +201,15 @@ struct mtk_drm_private {
 	bool need_vsync_switch;
 	struct workqueue_struct *vsync_switch_wq;
 	struct work_struct vsync_switch_work;
+
+	/* indicate that whether the current frame backlight has been updated */
+	bool oplus_adfr_backlight_updated;
+	/* need qsync mode recovery after backlight status updated */
+	bool osync_mode_recovery;
+	/* set timer to reset qsync after the backlight is no longer updated */
+	struct hrtimer osync_mode_timer;
+	struct workqueue_struct *osync_mode_wq;
+	struct work_struct osync_mode_work;
 //endif
 
 	struct mml_drm_ctx *mml_ctx;

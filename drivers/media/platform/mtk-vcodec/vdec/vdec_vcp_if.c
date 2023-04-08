@@ -163,6 +163,9 @@ static int vdec_vcp_ipi_send(struct vdec_inst *inst, void *msg, int len, bool is
 
 	obj.len = len;
 	ipi_size = ((sizeof(u32) * 2) + len + 3) /4;
+	inst->vcu.failure = 0;
+	inst->ctx->err_msg = 0;
+
 	if (!is_ack) {
 		*msg_signaled = false;
 		if (!is_res)
@@ -184,6 +187,7 @@ static int vdec_vcp_ipi_send(struct vdec_inst *inst, void *msg, int len, bool is
 		inst->vcu.abort = 1;
 		if (inst->vcu.daemon_pid == get_vcp_generation())
 			trigger_vcp_halt(VCP_A_ID);
+		inst->ctx->err_msg = *(__u32 *)msg;
 		return -EIO;
 	}
 
@@ -202,6 +206,7 @@ wait_ack:
 			inst->vcu.abort = 1;
 			if (inst->vcu.daemon_pid == get_vcp_generation())
 				trigger_vcp_halt(VCP_A_ID);
+			inst->ctx->err_msg = *(__u32 *)msg;
 			return -EIO;
 		} else if (-ERESTARTSYS == ret) {
 			mtk_vcodec_err(inst, "wait vcp ipi %X ack ret %d RESTARTSYS retry! (%d)",
@@ -772,6 +777,7 @@ static int vcp_vdec_notify_callback(struct notifier_block *this,
 	struct mtk_vcodec_ctx *ctx;
 	int timeout = 0;
 	bool backup = false;
+	struct vdec_inst *inst = NULL;
 
 	if (!(mtk_vcodec_vcp & (1 << MTK_INST_DECODER)))
 		return 0;
@@ -794,6 +800,11 @@ static int vcp_vdec_notify_callback(struct notifier_block *this,
 			ctx = list_entry(p, struct mtk_vcodec_ctx, list);
 			if (ctx != NULL && ctx->state != MTK_STATE_ABORT) {
 				ctx->state = MTK_STATE_ABORT;
+				inst = (struct vdec_inst *)(ctx->drv_handle);
+				if (inst != NULL) {
+					inst->vcu.failure = VDEC_IPI_MSG_STATUS_FAIL;
+					inst->vcu.abort = 1;
+				}
 				vdec_check_release_lock(ctx);
 				mtk_vdec_queue_error_event(ctx);
 			}

@@ -1009,7 +1009,13 @@ static int panel_hbm_set_cmdq(struct drm_panel *panel, void *dsi,
 		}
 		hbm_brightness_flag = false;
 		if (last_backlight > oplus_display_brightness) {
-			lcm_setbacklight_cmdq(dsi, cb, handle, last_backlight);
+			if (oplus_display_brightness > 3)
+			{
+				lcm_setbacklight_cmdq(dsi, cb, handle, oplus_display_brightness);
+			} else {
+				lcm_setbacklight_cmdq(dsi, cb, handle, last_backlight);
+			}
+
 		} else {
 			lcm_setbacklight_cmdq(dsi, cb, handle, oplus_display_brightness);
 		}

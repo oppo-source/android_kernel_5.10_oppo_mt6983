@@ -1210,9 +1210,10 @@ static void vcu_gce_pkt_destroy(struct cmdq_cb_data data)
 {
 	struct cmdq_pkt *pkt = (struct cmdq_pkt *)data.data;
 
-	if (data.err < 0)
+	if (data.err < 0) {
 		pr_info("%s %d pkt:%p err:%d", __func__, __LINE__, pkt, data.err);
-	cmdq_dump_pkt(pkt, 0, true);
+		cmdq_dump_pkt(pkt, 0, false);
+	}
 	cmdq_pkt_destroy(pkt);
 	pr_debug("%s: pkt:%p", __func__, pkt);
 }

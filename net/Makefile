@@ -93,6 +93,10 @@ obj-$(CONFIG_MPTCP)		+= mptcp/
 obj-$(CONFIG_OPLUS_FEATURE_WIFI_CAPCENTER) += oplus_wificapcenter/
 #endif /* OPLUS_FEATURE_WIFI_CAPCENTER */
 
+#ifdef OPLUS_FEATURE_WIFI_ROUTERBOOST
+obj-$(CONFIG_OPLUS_FEATURE_WIFI_ROUTERBOOST) += oplus_connectivity_routerboost/
+#endif /* OPLUS_FEATURE_WIFI_ROUTERBOOST */
+
 #ifdef OPLUS_FEATURE_WIFI_SLA
 obj-$(CONFIG_OPLUS_FEATURE_WIFI_SLA) += oplus_connectivity_sla/
 #endif /* OPLUS_FEATURE_WIFI_SLA */

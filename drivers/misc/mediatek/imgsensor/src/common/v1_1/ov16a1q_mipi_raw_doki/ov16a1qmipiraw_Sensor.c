@@ -54,7 +54,7 @@
 #include "ov16a1qmipiraw_Setting.h"
 
 
-#define LOG_INF(format, args...)	pr_debug(PFX "[%s] " format, __func__, ##args)
+#define LOG_INF(format, args...)    pr_debug(PFX "[%s] " format, __func__, ##args)
 
 static DEFINE_SPINLOCK(imgsensor_drv_lock);
 //#ifdef OPLUS_FEATURE_CAMERA_COMMON
@@ -245,33 +245,33 @@ static struct SENSOR_WINSIZE_INFO_STRUCT imgsensor_winsize_info[8] = {
 
 static kal_uint16 table_write_cmos_sensor(kal_uint16 *para, kal_uint32 len)
 {
-	char puSendCmd[I2C_BUFFER_LEN];
-	kal_uint32 tosend, index;
-	kal_uint16 addr = 0, addr_last = 0, data;
-	tosend = 0;
-	index = 0;
-	while (len > index) {
-		addr = para[index];
-		puSendCmd[tosend++] = (char)(addr >> 8);
-		puSendCmd[tosend++] = (char)(addr & 0xFF);
-		data = para[index + 1];
-		puSendCmd[tosend++] = (char)(data & 0xFF);
-		index += 2;
-		addr_last = addr;
-		/* Write when remain buffer size is less than 3 bytes
-		 * or reach end of data
-		 */
-		if ((I2C_BUFFER_LEN - tosend) < 3
-			|| index == len || addr != addr_last) {
-			iBurstWriteReg_multi(puSendCmd,
-				tosend,
-				imgsensor.i2c_write_id,
-				3,
-				imgsensor_info.i2c_speed);
-			tosend = 0;
-		}
-	}
-	return 0;
+    char puSendCmd[I2C_BUFFER_LEN];
+    kal_uint32 tosend, index;
+    kal_uint16 addr = 0, addr_last = 0, data;
+    tosend = 0;
+    index = 0;
+    while (len > index) {
+        addr = para[index];
+        puSendCmd[tosend++] = (char)(addr >> 8);
+        puSendCmd[tosend++] = (char)(addr & 0xFF);
+        data = para[index + 1];
+        puSendCmd[tosend++] = (char)(data & 0xFF);
+        index += 2;
+        addr_last = addr;
+        /* Write when remain buffer size is less than 3 bytes
+         * or reach end of data
+         */
+        if ((I2C_BUFFER_LEN - tosend) < 3
+            || index == len || addr != addr_last) {
+            iBurstWriteReg_multi(puSendCmd,
+                tosend,
+                imgsensor.i2c_write_id,
+                3,
+                imgsensor_info.i2c_speed);
+            tosend = 0;
+        }
+    }
+    return 0;
 }
 
 static kal_uint16 read_cmos_sensor(kal_uint16 addr)
@@ -295,13 +295,13 @@ static void set_dummy(void)
 
     write_cmos_sensor(0x380C, (imgsensor.line_length >> 8) & 0xFF);
     write_cmos_sensor(0x380D, (imgsensor.line_length >> 0) & 0xFF);
-    write_cmos_sensor(0x380E, (imgsensor.frame_length >> 8) & 0xFF);
-    write_cmos_sensor(0x380F, (imgsensor.frame_length >> 0) & 0xFF);
+    write_cmos_sensor(0x380E, (imgsensor.frame_length >> 8) & 0x7F);
+    write_cmos_sensor(0x380F, (imgsensor.frame_length >> 0) & 0xFE);
 }
 
 static void set_mirror_flip(kal_uint8 image_mirror)
 {
-	pr_debug("image_mirror = %d\n", image_mirror);
+    pr_debug("image_mirror = %d\n", image_mirror);
 }
 
 static void set_max_framerate(UINT16 framerate, kal_bool min_framelength_en)
@@ -386,11 +386,13 @@ static void write_shutter(kal_uint32 shutter)
 
     if(shutter >= 23470 && imgsensor.dpc_state != 1) {
         imgsensor.dpc_state = 1;
+        write_cmos_sensor(0x5220, 0x00);
         write_cmos_sensor(0x5221, 0x00);
         write_cmos_sensor(0x5222, 0x5B);
-        write_cmos_sensor(0x5223, 0xEA);
+        write_cmos_sensor(0x5223, 0xAE);
     } else if(imgsensor.dpc_state != 0){
         imgsensor.dpc_state = 0;
+        write_cmos_sensor(0x5220, 0x00);
         write_cmos_sensor(0x5221, 0x65);
         write_cmos_sensor(0x5222, 0x10);
         write_cmos_sensor(0x5223, 0x00);
@@ -440,8 +442,8 @@ static kal_uint16 set_gain(kal_uint16 gain)
 
     write_cmos_sensor(0x3208, 0x01);
 
-    write_cmos_sensor(0x3508, (reg_gain >> 8) & 0xFF);
-    write_cmos_sensor(0x3509, (reg_gain >> 0) & 0xFF);
+    write_cmos_sensor(0x3508, (reg_gain >> 8) & 0x7F);
+    write_cmos_sensor(0x3509, (reg_gain >> 0) & 0xFE);
 
     write_cmos_sensor(0x3208, 0x11);
     write_cmos_sensor(0x3208, 0xA1);
@@ -510,12 +512,12 @@ static void read_4cell_from_eeprom(char* data, char* src, int addr, int len)
 static BYTE ov16a1q_doki_common_data[CAMERA_EEPPROM_COMDATA_LENGTH] = { 0 };
 static kal_uint16 read_ov16a1q_doki_eeprom_module(kal_uint32 addr)
 {
-	kal_uint16 get_byte = 0;
-	char pusendcmd[2] = { (char)(addr >> 8), (char)(addr & 0xFF) };
+    kal_uint16 get_byte = 0;
+    char pusendcmd[2] = { (char)(addr >> 8), (char)(addr & 0xFF) };
 
-	iReadRegI2C(pusendcmd, 2, (u8 *) &get_byte, 1, EEPROM_I2C_ADDR);
+    iReadRegI2C(pusendcmd, 2, (u8 *) &get_byte, 1, EEPROM_I2C_ADDR);
 
-	return get_byte;
+    return get_byte;
 }
 
 static void read_ov16a1q_doki_module_data(UINT32 sensor_id)
@@ -527,36 +529,36 @@ static void read_ov16a1q_doki_module_data(UINT32 sensor_id)
 // lensid   : [44 ~ 45]
 // sensorid : [30 ~ 33]
 
-	kal_uint16 idx = 0;
+    kal_uint16 idx = 0;
     kal_uint16 sn_length = 17;
-	kal_uint32 sn_starAddr = 0xB0;
-	kal_uint32 vcmAddr = 0x0C;
-	kal_uint32 lensAddr = 0x08;
+    kal_uint32 sn_starAddr = 0xB0;
+    kal_uint32 vcmAddr = 0x0C;
+    kal_uint32 lensAddr = 0x08;
 
-	memset(ov16a1q_doki_common_data, 0,sizeof(ov16a1q_doki_common_data));
-	// QR
-	for(idx = 0; idx < sn_length; idx++)
-	{
-		ov16a1q_doki_common_data[8 + idx] = read_ov16a1q_doki_eeprom_module(sn_starAddr + idx);
-	}
-	//vcm
-	ov16a1q_doki_common_data[40] = read_ov16a1q_doki_eeprom_module(vcmAddr);
-	ov16a1q_doki_common_data[41] = read_ov16a1q_doki_eeprom_module(vcmAddr + 1);
-	//lensid
-	ov16a1q_doki_common_data[44] = read_ov16a1q_doki_eeprom_module(lensAddr);
-	ov16a1q_doki_common_data[45] = read_ov16a1q_doki_eeprom_module(lensAddr + 1);
+    memset(ov16a1q_doki_common_data, 0,sizeof(ov16a1q_doki_common_data));
+    // QR
+    for(idx = 0; idx < sn_length; idx++)
+    {
+        ov16a1q_doki_common_data[8 + idx] = read_ov16a1q_doki_eeprom_module(sn_starAddr + idx);
+    }
+    //vcm
+    ov16a1q_doki_common_data[40] = read_ov16a1q_doki_eeprom_module(vcmAddr);
+    ov16a1q_doki_common_data[41] = read_ov16a1q_doki_eeprom_module(vcmAddr + 1);
+    //lensid
+    ov16a1q_doki_common_data[44] = read_ov16a1q_doki_eeprom_module(lensAddr);
+    ov16a1q_doki_common_data[45] = read_ov16a1q_doki_eeprom_module(lensAddr + 1);
     //sensor id
     ov16a1q_doki_common_data[30] = ((sensor_id) >> 24) & 0xff;
-	ov16a1q_doki_common_data[31] = ((sensor_id) >> 16) & 0xff;
-	ov16a1q_doki_common_data[32] = ((sensor_id) >> 8) & 0xff;
-	ov16a1q_doki_common_data[33] = (sensor_id) & 0xff;
+    ov16a1q_doki_common_data[31] = ((sensor_id) >> 16) & 0xff;
+    ov16a1q_doki_common_data[32] = ((sensor_id) >> 8) & 0xff;
+    ov16a1q_doki_common_data[33] = (sensor_id) & 0xff;
 
-	for (idx = 0; idx < CAMERA_EEPPROM_COMDATA_LENGTH; idx = idx + 4)
-		LOG_INF("cam data: %02x %02x %02x %02x\n",
-		       ov16a1q_doki_common_data[idx],
-		       ov16a1q_doki_common_data[idx + 1],
-		       ov16a1q_doki_common_data[idx + 2],
-		       ov16a1q_doki_common_data[idx + 3]);
+    for (idx = 0; idx < CAMERA_EEPPROM_COMDATA_LENGTH; idx = idx + 4)
+        LOG_INF("cam data: %02x %02x %02x %02x\n",
+               ov16a1q_doki_common_data[idx],
+               ov16a1q_doki_common_data[idx + 1],
+               ov16a1q_doki_common_data[idx + 2],
+               ov16a1q_doki_common_data[idx + 3]);
 }
 //#endif  /* OPLUS_FEATURE_CAMERA_COMMON */
 
@@ -573,7 +575,7 @@ static kal_uint32 get_imgsensor_id(UINT32 *sensor_id)
             *sensor_id = ((read_cmos_sensor(0x300B) << 8)
                     | read_cmos_sensor(0x300C));
             if (*sensor_id == imgsensor_info.sensor_id) {
-                pr_debug("find sensor: 0x%x, sensor id: 0x%x\n", imgsensor.i2c_write_id, *sensor_id);
+                pr_info("find sensor: 0x%x, sensor id: 0x%x\n", imgsensor.i2c_write_id, *sensor_id);
                 module_id = read_ov16a1q_doki_eeprom_module(MODULE_ID_OFFSET);
                 if (deviceInfo_register_value == 0) {
                     register_imgsensor_deviceinfo("Cam_f", DEVICE_VERSION, module_id);
@@ -591,7 +593,7 @@ static kal_uint32 get_imgsensor_id(UINT32 *sensor_id)
                 return ERROR_NONE;
             }
 
-            pr_debug("Read sensor id fail, id: 0x%x\n",    imgsensor.i2c_write_id);
+            pr_err("Read sensor id fail, id: 0x%x\n",    imgsensor.i2c_write_id);
             retry--;
         } while (retry > 0);
         i++;
@@ -610,7 +612,7 @@ static void sensor_init(void)
     load_init_setting();
     set_mirror_flip(imgsensor.mirror);
     pr_debug("OV16A1QMIPIRAW sensor_init X\n");
-}	/* sensor_init */
+}    /* sensor_init */
 
 static kal_uint32 open(void)
 {
@@ -631,7 +633,7 @@ static kal_uint32 open(void)
                     imgsensor.i2c_write_id, sensor_id);
                 break;
             }
-            pr_debug("Read sensor id fail, id: 0x%x\n",
+            pr_err("Read sensor id fail, id: 0x%x\n",
                 imgsensor.i2c_write_id);
             retry--;
         } while (retry > 0);
@@ -1040,7 +1042,7 @@ static kal_uint32 control(enum MSDK_SCENARIO_ID_ENUM scenario_id,
         custom3(image_window, sensor_config_data);
         break;
     default:
-        pr_debug("Error ScenarioId setting");
+        pr_warn("Error ScenarioId setting");
         preview(image_window, sensor_config_data);
         return ERROR_INVALID_SCENARIO_ID;
     }
@@ -1320,19 +1322,19 @@ static kal_uint32 feature_control(MSDK_SENSOR_FEATURE_ENUM feature_id,
     /*pr_debug("feature_id = %d\n", feature_id);*/
     switch (feature_id) {
     case SENSOR_FEATURE_GET_ANA_GAIN_TABLE:
-		if ((void *)(uintptr_t) (*(feature_data + 0)) == 0) {
-			*(feature_data + 0) =
-				sizeof(ana_gain_table_16x);
-				pr_debug("ana_gain_table_16x size = %d\n", sizeof(ana_gain_table_16x));
-		} else {
-			pr_debug("befor memccpy ana_gain_table_16x \n");
-			memcpy((void *)(uintptr_t) (*(feature_data + 1)),
-			(void *)ana_gain_table_16x,
-			sizeof(ana_gain_table_16x));
-			pr_debug("after memccpy ana_gain_table_16x \n");
+        if ((void *)(uintptr_t) (*(feature_data + 0)) == 0) {
+            *(feature_data + 0) =
+                sizeof(ana_gain_table_16x);
+                pr_debug("ana_gain_table_16x size = %d\n", sizeof(ana_gain_table_16x));
+        } else {
+            pr_debug("befor memccpy ana_gain_table_16x \n");
+            memcpy((void *)(uintptr_t) (*(feature_data + 1)),
+            (void *)ana_gain_table_16x,
+            sizeof(ana_gain_table_16x));
+            pr_debug("after memccpy ana_gain_table_16x \n");
 
-		}
-		break;
+        }
+        break;
     case SENSOR_FEATURE_GET_AWB_REQ_BY_SCENARIO:
         *(MUINT32 *)(uintptr_t)(*(feature_data + 1)) = 0;
         break;
@@ -1720,23 +1722,23 @@ static kal_uint32 feature_control(MSDK_SENSOR_FEATURE_ENUM feature_id,
     case SENSOR_FEATURE_SET_LSC_TBL:
         break;
 //#ifdef OPLUS_FEATURE_CAMERA_COMMON
-	case SENSOR_FEATURE_GET_MODULE_INFO:
-		break;
-	case SENSOR_FEATURE_GET_MODULE_SN:
-		break;
-	case SENSOR_FEATURE_SET_SENSOR_OTP:
-		break;
-	case SENSOR_FEATURE_CHECK_MODULE_ID:
-		break;
-	case SENSOR_FEATURE_GET_EEPROM_COMDATA:
-		memcpy(feature_return_para_32, ov16a1q_doki_common_data,
-				CAMERA_EEPPROM_COMDATA_LENGTH);
-		*feature_para_len = CAMERA_EEPPROM_COMDATA_LENGTH;
-		break;
-	case SENSOR_FEATURE_GET_EEPROM_STEREODATA:
-		break;
-	case SENSOR_FEATURE_GET_DISTORTIONPARAMS:
-		break;
+    case SENSOR_FEATURE_GET_MODULE_INFO:
+        break;
+    case SENSOR_FEATURE_GET_MODULE_SN:
+        break;
+    case SENSOR_FEATURE_SET_SENSOR_OTP:
+        break;
+    case SENSOR_FEATURE_CHECK_MODULE_ID:
+        break;
+    case SENSOR_FEATURE_GET_EEPROM_COMDATA:
+        memcpy(feature_return_para_32, ov16a1q_doki_common_data,
+                CAMERA_EEPPROM_COMDATA_LENGTH);
+        *feature_para_len = CAMERA_EEPPROM_COMDATA_LENGTH;
+        break;
+    case SENSOR_FEATURE_GET_EEPROM_STEREODATA:
+        break;
+    case SENSOR_FEATURE_GET_DISTORTIONPARAMS:
+        break;
 //#endif /* OPLUS_FEATURE_CAMERA_COMMON */
     default:
         break;

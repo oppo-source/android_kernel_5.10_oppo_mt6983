@@ -114,6 +114,7 @@ int oplus_ofp_get_aod_state(void)
 
 	return p_oplus_ofp_params->aod_state;
 }
+EXPORT_SYMBOL(oplus_ofp_get_aod_state);
 
 int oplus_ofp_set_aod_state(bool aod_state)
 {
@@ -199,13 +200,21 @@ int oplus_ofp_property_update(int prop_id, unsigned int prop_val)
 static int oplus_ofp_cmdq_pkt_wait(struct mtk_drm_crtc *mtk_crtc, struct cmdq_pkt *cmdq_handle, int te_count, int delay_us)
 {
 	int wait_te_count = te_count;
+	struct drm_crtc *crtc;
 
 	if ((wait_te_count <= 0) && (delay_us <= 0)) {
 		return 0;
 	}
 
 	if (!mtk_crtc) {
-		OFP_ERR("Invalid params\n");
+		OFP_ERR("Invalid mtk_crtc params\n");
+		return -EINVAL;
+	}
+
+	crtc = &mtk_crtc->base;
+
+	if (!crtc) {
+		OFP_ERR("Invalid crtc params\n");
 		return -EINVAL;
 	}
 
@@ -218,11 +227,21 @@ static int oplus_ofp_cmdq_pkt_wait(struct mtk_drm_crtc *mtk_crtc, struct cmdq_pk
 	OFP_INFO("wait %d te and delay %dus\n", wait_te_count, delay_us);
 
 	if (wait_te_count > 0) {
-		cmdq_pkt_clear_event(cmdq_handle, mtk_crtc->gce_obj.event[EVENT_TE]);
+		if (mtk_crtc_with_event_loop(crtc)) {
+			cmdq_pkt_clear_event(cmdq_handle,
+					mtk_crtc->gce_obj.event[EVENT_SYNC_TOKEN_TE]);
+		} else {
+			cmdq_pkt_clear_event(cmdq_handle, mtk_crtc->gce_obj.event[EVENT_TE]);
+		}
 
 		while (wait_te_count > 0) {
 			OFP_DEBUG("start to wait EVENT_TE, remain %d te count\n", wait_te_count);
-			cmdq_pkt_wfe(cmdq_handle, mtk_crtc->gce_obj.event[EVENT_TE]);
+			if (mtk_crtc_with_event_loop(crtc)) {
+				cmdq_pkt_wfe(cmdq_handle,
+						mtk_crtc->gce_obj.event[EVENT_SYNC_TOKEN_TE]);
+			}  else {
+				cmdq_pkt_wfe(cmdq_handle, mtk_crtc->gce_obj.event[EVENT_TE]);
+			}
 			OFP_DEBUG("complete the EVENT_TE waiting\n");
 			wait_te_count--;
 		}

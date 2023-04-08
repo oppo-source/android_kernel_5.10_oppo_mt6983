@@ -1525,6 +1525,7 @@ static irqreturn_t msdc_irq(int irq, void *dev_id)
 static void msdc_init_hw(struct msdc_host *host)
 {
 	u32 val;
+	struct mmc_host *mmc = mmc_from_priv(host);
 #if !IS_ENABLED(CONFIG_MMC_AUTOK)
 	u32 tune_reg = host->dev_comp->pad_tune_reg;
 #endif
@@ -1697,7 +1698,11 @@ static void msdc_init_hw(struct msdc_host *host)
 	sdr_set_bits(host->base + MSDC_PATCH_BIT2, MSDC_PATCH_BIT2_CFGCRCSTS);
 	sdr_clr_bits(host->base + MSDC_PATCH_BIT2, MSDC_PB2_CFGCRCSTSEDGE);
 //#endif /* OPLUS_FEATURE_TP_BASIC */
-
+	//change MSDC_IOCON_RSPL if first init card err
+	if (host->id == MSDC_SD &&  mmc->f_init == 300000) {
+		dev_info(host->dev, "cur host->base + MSDC_IOCON reg %d", readl(host->base + MSDC_IOCON));
+		sdr_clr_bits(host->base + MSDC_IOCON, MSDC_IOCON_RSPL);
+	}
 	dev_info(host->dev, "init hardware done!");
 }
 

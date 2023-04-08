@@ -1138,6 +1138,9 @@ void mtk_drm_send_lcm_cmd_prepare(struct drm_crtc *crtc,
 	struct cmdq_pkt **cmdq_handle);
 void mtk_drm_send_lcm_cmd_flush(struct drm_crtc *crtc,
 	struct cmdq_pkt **cmdq_handle, bool sync);
+
+int mtk_crtc_set_high_pwm_switch(struct drm_crtc *crtc, unsigned int en);
+
 /* #endif */ /* OPLUS_FEATURE_ONSCREENFINGERPRINT */
 void mtk_crtc_update_gce_event(struct mtk_drm_crtc *mtk_crtc);
 #endif /* MTK_DRM_CRTC_H */

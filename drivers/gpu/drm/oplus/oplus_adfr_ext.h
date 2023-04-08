@@ -14,6 +14,8 @@
 #ifndef _OPLUS_ADFR_EXT_H_
 #define _OPLUS_ADFR_EXT_H_
 
+#include <drm/drm_modes.h>
+
 enum oplus_adfr_log_level {
 	OPLUS_ADFR_LOG_LEVEL_ERR = 0,
 	OPLUS_ADFR_LOG_LEVEL_WARN = 1,
@@ -129,6 +131,7 @@ extern u32 oplus_adfr_config;
 extern bool enable_multite;
 extern inline bool oplus_adfr_is_support(void);
 extern void oplus_adfr_vsync_switch(struct drm_display_mode *m, bool force_te_vsync);
+extern int oplus_adfr_temperature_detection_handle(void *mtk_ddp_comp, void *cmdq_pkt, int ntc_temp, int shell_temp);
 extern void oplus_adfr_status_reset(struct drm_display_mode *src_m, struct drm_display_mode *dst_m);
 extern void oplus_adfr_set_multite_state(bool state);
 

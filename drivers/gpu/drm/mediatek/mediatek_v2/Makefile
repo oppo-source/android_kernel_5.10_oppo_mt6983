@@ -104,7 +104,8 @@ mediatek-drm-y += ../../oplus/oplus_display_private_api.o \
          ../../oplus/oplus_display_mtk_debug.o \
          ../../oplus/oplus_display_mtk_debug.o \
          ../../oplus/oplus_display_panel.o \
-         ../../oplus/oplus_adfr.o
+         ../../oplus/oplus_adfr.o \
+         ../../oplus/oplus_display_temperature.o
 
 obj-$(CONFIG_DRM_MEDIATEK) += mediatek-drm.o
 obj-$(CONFIG_DRM_MEDIATEK) += mtk_sync.o

@@ -1022,6 +1022,12 @@ static enum page_references page_check_references(struct page *page,
 	unsigned long vm_flags;
 	bool should_protect = false;
 	bool trylock_fail = false;
+	int ref = 0;
+
+	trace_android_vh_check_page_look_around_ref(page, &ref);
+	if (ref) {
+		return ref;
+	}
 
 	trace_android_vh_page_should_be_protected(page, &should_protect);
 	if (unlikely(should_protect))

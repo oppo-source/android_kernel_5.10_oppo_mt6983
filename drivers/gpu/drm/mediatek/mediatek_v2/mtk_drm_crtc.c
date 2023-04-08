@@ -157,6 +157,8 @@ static unsigned int dummy_data[MT6983_DUMMY_REG_CNT];
 u32 flag_silky_panel = 0;
 EXPORT_SYMBOL(flag_silky_panel);
 u32 g_cur_fps = 0;
+unsigned int hpwm_fps_mode;
+extern unsigned int hpwm_mode;
 /* #endif OPLUS_BUG_STABILITY */
 
 extern bool pq_trigger;
@@ -749,6 +751,10 @@ static int mtk_drm_crtc_set_property(struct drm_crtc *crtc,
 			if (oplus_adfr_is_support()) {
 				struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 				if (mtk_crtc && !index && !mtk_crtc->ddp_mode) {
+					if (i == CRTC_PROP_AUTO_MIN_FPS &&
+						crtc->state->mode.hskew == OPLUS_ADFR &&
+						val != 0)
+						val = 120 / (val + 1);
 					oplus_adfr_handle_auto_mode(i, val);
 				}
 			}
@@ -1351,6 +1357,52 @@ void mtk_drm_send_lcm_cmd_flush(struct drm_crtc *crtc,
 }
 //#endif
 //#ifdef OPLUS_FEATURE_DRE
+
+void mtk_drm_send_lcm_cmd_prepare_wait_for_vsync(struct drm_crtc *crtc, struct cmdq_pkt **cmdq_handle)
+{
+	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
+	bool is_frame_mode;
+
+	mtk_drm_idlemgr_kick(__func__, crtc, 0);
+
+
+	is_frame_mode = mtk_crtc_is_frame_trigger_mode(&mtk_crtc->base);
+
+	if (is_frame_mode) {
+		*cmdq_handle = cmdq_pkt_create(mtk_crtc->gce_obj.client[CLIENT_CFG]);
+
+		if (mtk_crtc_with_sub_path(crtc, mtk_crtc->ddp_mode))
+			mtk_crtc_wait_frame_done(mtk_crtc, *cmdq_handle,
+				DDP_SECOND_PATH,0);
+		else
+			mtk_crtc_wait_frame_done(mtk_crtc, *cmdq_handle,
+				DDP_FIRST_PATH,0);
+
+		cmdq_pkt_clear_event(*cmdq_handle,
+				     mtk_crtc->gce_obj.event[EVENT_TE]);
+		if (mtk_drm_lcm_is_connect(mtk_crtc))
+			cmdq_pkt_wfe(*cmdq_handle,
+					 mtk_crtc->gce_obj.event[EVENT_TE]);
+
+		cmdq_pkt_clear_event(*cmdq_handle,
+			mtk_crtc->gce_obj.event[EVENT_STREAM_BLOCK]);
+		cmdq_pkt_wfe(*cmdq_handle,
+			     mtk_crtc->gce_obj.event[EVENT_CABC_EOF]);
+
+	} else {
+		*cmdq_handle = cmdq_pkt_create(mtk_crtc->gce_obj.client[CLIENT_DSI_CFG]);
+
+		if (mtk_crtc_with_sub_path(crtc, mtk_crtc->ddp_mode))
+			mtk_crtc_wait_frame_done(mtk_crtc, *cmdq_handle,
+				DDP_SECOND_PATH,0);
+		else
+			mtk_crtc_wait_frame_done(mtk_crtc, *cmdq_handle,
+				DDP_FIRST_PATH,0);
+	}
+	(*cmdq_handle)->err_cb.cb = mtk_crtc_cmdq_timeout_cb;
+	(*cmdq_handle)->err_cb.data = crtc;
+}
+
 int oplus_mtk_drm_setcabc(struct drm_crtc *crtc, unsigned int cabc_mode)
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
@@ -1403,6 +1455,102 @@ int oplus_mtk_drm_setseed(struct drm_crtc *crtc, unsigned int seed_mode)
 
 	return 0;
 }
+
+int mtk_crtc_set_high_pwm_switch(struct drm_crtc *crtc, unsigned int en)
+{
+	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
+	struct mtk_ddp_comp *comp;
+	struct mtk_panel_ext *ext = mtk_crtc->panel_ext;
+	struct cmdq_pkt *cmdq_handle;
+	struct mtk_crtc_state *state =
+	    to_mtk_crtc_state(mtk_crtc->base.state);
+	unsigned int src_mode =
+	    state->prop_val[CRTC_PROP_DISP_MODE_IDX];
+	unsigned int fps = 0;
+
+	if (ext == NULL) {
+		DDPINFO("%s %d mtk_crtc->panel_ext is NULL\n", __func__, __LINE__);
+		return -EINVAL;
+	}
+	pr_info("%s, en=%d,hpwm_mode=%d\n", __func__,en,hpwm_mode);
+
+	if (hpwm_mode == en) {
+        DDPPR_ERR("hpwm_mode no changer\n");
+		return 0;
+	}
+
+
+	DDP_MUTEX_LOCK(&mtk_crtc->lock, __func__, __LINE__);
+
+	if (!mtk_crtc->enabled)
+		goto done;
+
+	comp = mtk_ddp_comp_request_output(mtk_crtc);
+	if (!comp) {
+		DDPPR_ERR("request output fail\n");
+		DDP_MUTEX_UNLOCK(&mtk_crtc->lock, __func__, __LINE__);
+		return -EINVAL;
+	}
+
+	mtk_drm_send_lcm_cmd_prepare_wait_for_vsync(crtc, &cmdq_handle);
+
+		/* because only mode = 3 (60fps), we need changed to 120fps */
+		pr_info("%s, src_mode=%d\n", __func__, src_mode);
+		if (src_mode == 3) {
+			fps = 120;
+			if (!en)
+				hpwm_fps_mode = !en;
+			if (comp && comp->funcs && comp->funcs->io_cmd)
+				comp->funcs->io_cmd(comp, cmdq_handle, DSI_SET_HPWM_FPS, &fps);
+			/** wait one TE **/
+			cmdq_pkt_clear_event(cmdq_handle, mtk_crtc->gce_obj.event[EVENT_TE]);
+			if (mtk_drm_lcm_is_connect(mtk_crtc))
+				cmdq_pkt_wfe(cmdq_handle, mtk_crtc->gce_obj.event[EVENT_TE]);
+			/** wait one TE **/
+			cmdq_pkt_clear_event(cmdq_handle, mtk_crtc->gce_obj.event[EVENT_TE]);
+			if (mtk_drm_lcm_is_connect(mtk_crtc))
+				cmdq_pkt_wfe(cmdq_handle, mtk_crtc->gce_obj.event[EVENT_TE]);
+			hpwm_fps_mode = en;
+		}
+
+		if (comp && comp->funcs && comp->funcs->io_cmd)
+			comp->funcs->io_cmd(comp, cmdq_handle, DSI_SET_HPWM, &en);
+
+		/** wait one TE **/
+		cmdq_pkt_clear_event(cmdq_handle, mtk_crtc->gce_obj.event[EVENT_TE]);
+		if (mtk_drm_lcm_is_connect(mtk_crtc))
+			cmdq_pkt_wfe(cmdq_handle, mtk_crtc->gce_obj.event[EVENT_TE]);
+
+		if (comp && comp->funcs && comp->funcs->io_cmd)
+			comp->funcs->io_cmd(comp, cmdq_handle, DSI_SET_HPWM_ELVSS, &en);
+
+		/* because only mode = 3 (60fps), we need recovery 60fps */
+		if (src_mode == 3) {
+			fps = 60;
+			/** wait one TE **/
+			cmdq_pkt_clear_event(cmdq_handle, mtk_crtc->gce_obj.event[EVENT_TE]);
+			if (mtk_drm_lcm_is_connect(mtk_crtc))
+				cmdq_pkt_wfe(cmdq_handle, mtk_crtc->gce_obj.event[EVENT_TE]);
+			if (comp && comp->funcs && comp->funcs->io_cmd)
+				comp->funcs->io_cmd(comp, cmdq_handle, DSI_SET_HPWM_FPS, &fps);
+		}
+
+	/* because only mode = 0 (120fps), we need set fps close pwm */
+	if (src_mode == 0) {
+		fps = 120;
+		hpwm_fps_mode = en;
+		if (comp && comp->funcs && comp->funcs->io_cmd)
+			comp->funcs->io_cmd(comp, cmdq_handle, DSI_SET_HPWM_FPS, &fps);
+	}
+
+	mtk_drm_send_lcm_cmd_flush(crtc, &cmdq_handle, 0);
+
+	done:
+		DDP_MUTEX_UNLOCK(&mtk_crtc->lock, __func__, __LINE__);
+
+		return 0;
+	}
+
 
 int mtk_drm_aod_setbacklight(struct drm_crtc *crtc, unsigned int level)
 {
@@ -1476,8 +1624,6 @@ int mtk_drm_aod_setbacklight(struct drm_crtc *crtc, unsigned int level)
 			mtk_crtc->gce_obj.event[EVENT_STREAM_BLOCK]);
 		cmdq_pkt_wfe(cmdq_handle,
 			mtk_crtc->gce_obj.event[EVENT_CABC_EOF]);
-		cmdq_pkt_clear_event(cmdq_handle,
-			mtk_crtc->gce_obj.event[EVENT_STREAM_DIRTY]);
 	}
 
 	/* frame done gce event revise, fix by Faker at 2022/10/31 */
@@ -1494,8 +1640,6 @@ int mtk_drm_aod_setbacklight(struct drm_crtc *crtc, unsigned int level)
 			cmdq_handle, DSI_SET_BL_AOD, &level);
 
 	if (is_frame_mode) {
-		cmdq_pkt_set_event(cmdq_handle,
-			mtk_crtc->gce_obj.event[EVENT_STREAM_DIRTY]);
 		cmdq_pkt_set_event(cmdq_handle,
 			mtk_crtc->gce_obj.event[EVENT_CABC_EOF]);
 		/* frame done gce event revise, fix by Faker at 2022/10/31 */
@@ -5129,10 +5273,10 @@ static void ddp_cmdq_cb(struct cmdq_cb_data data)
 	unsigned int _dsi_state_dbg7_2 = 0;
 	ktime_t pf_time = 0;
 
-	DDPINFO("crtc_state:%x, atomic_state:%x, crtc:%x, err:%d\n",
+	DDPINFO("crtc_state:%x, atomic_state:%x, crtc:%x, err:%d,rec_irq:%llu\n",
 		crtc_state,
 		atomic_state,
-		crtc, data.err);
+		crtc, data.err,cb_data->cmdq_handle->rec_irq);
 
 	if (!mtk_crtc) {
 		DDPINFO("NULL pointer mtk_crtc ");
@@ -5595,6 +5739,13 @@ void mtk_crtc_start_event_loop(struct drm_crtc *crtc)
 		return;
 	}
 
+	//#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+	if (crtc->state->mode.hskew == OPLUS_ADFR || crtc->state->mode.hskew == OPLUS_MFR) {
+		DDPMSG("not start event loop in OA mode\n");
+		return;
+	}
+	//#endif
+
 	if (crtc && crtc->state)
 		cur_fps = drm_mode_vrefresh(&crtc->state->mode);
 #ifdef OPLUS_FEATURE_DISPLAY
@@ -5808,7 +5959,9 @@ void mtk_crtc_start_trig_loop(struct drm_crtc *crtc)
 #ifndef OPLUS_FEATURE_DISPLAY
 				if (cur_fps != 60 && mtk_drm_helper_get_opt(priv->helper_opt,
 #else
-				if (mtk_drm_helper_get_opt(priv->helper_opt,
+				//#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+				if ((crtc->state->mode.hskew != OPLUS_ADFR && crtc->state->mode.hskew != OPLUS_MFR)
+					&& mtk_drm_helper_get_opt(priv->helper_opt,
 #endif /* OPLUS_FEATURE_DISPLAY */
 						MTK_DRM_OPT_PRE_TE)) {
 					mtk_disp_mutex_enable_cmdq(mtk_crtc->mutex[0], cmdq_handle,
@@ -5818,7 +5971,9 @@ void mtk_crtc_start_trig_loop(struct drm_crtc *crtc)
 #ifndef OPLUS_FEATURE_DISPLAY
 				if (cur_fps != 60 && mtk_drm_helper_get_opt(priv->helper_opt,
 #else
-				if (mtk_drm_helper_get_opt(priv->helper_opt,
+				//#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+				if ((crtc->state->mode.hskew != OPLUS_ADFR && crtc->state->mode.hskew != OPLUS_MFR)
+					&& mtk_drm_helper_get_opt(priv->helper_opt,
 #endif /* OPLUS_FEATURE_DISPLAY */
 						MTK_DRM_OPT_PRE_TE)) {
 					cmdq_pkt_clear_event(cmdq_handle,
@@ -5851,7 +6006,9 @@ void mtk_crtc_start_trig_loop(struct drm_crtc *crtc)
 #ifndef OPLUS_FEATURE_DISPLAY
 		if (cur_fps != 60 && mtk_drm_helper_get_opt(priv->helper_opt,
 #else
-		if (mtk_drm_helper_get_opt(priv->helper_opt,
+		//#ifdef OPLUS_FEATURE_DISPLAY_ADFR
+		if ((crtc->state->mode.hskew != OPLUS_ADFR && crtc->state->mode.hskew != OPLUS_MFR)
+			&& mtk_drm_helper_get_opt(priv->helper_opt,
 #endif /* OPLUS_FEATURE_DISPLAY */
 				MTK_DRM_OPT_PRE_TE)) {
 			cmdq_pkt_wfe(cmdq_handle,
@@ -7433,6 +7590,9 @@ static void mtk_drm_crtc_update_interface(struct drm_crtc *crtc,
 	struct mtk_ddp_comp *output_comp = NULL;
 	enum mtk_ddp_comp_id comp_id = 0;
 	struct drm_display_mode *timing = NULL;
+	struct drm_crtc_state *crtc_state;
+	struct mtk_crtc_state *mtk_crtc_state;
+	unsigned int crtc_index;
 
 	mtk_crtc = to_mtk_crtc(crtc);
 	output_comp = mtk_ddp_comp_request_output(mtk_crtc);
@@ -7452,6 +7612,14 @@ static void mtk_drm_crtc_update_interface(struct drm_crtc *crtc,
 
 				mtk_crtc_update_gce_event(mtk_crtc);
 
+				crtc_state = drm_atomic_get_crtc_state(state, crtc);
+				mtk_crtc_state = (crtc_state) ? to_mtk_crtc_state(crtc_state) : NULL;
+				if (mtk_crtc_state) {
+					crtc_index = drm_crtc_index(crtc);
+					mtk_crtc_state->lye_state.scn[crtc_index] = NONE;
+					DDPMSG("%s clear crtc%u scn to NONE\n",
+						__func__, crtc_index);
+				}
 				/*update mtk_crtc->panel_ext*/
 				output_comp = mtk_ddp_comp_request_output(mtk_crtc);
 				if (!output_comp)

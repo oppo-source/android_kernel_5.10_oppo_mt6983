@@ -216,3 +216,5 @@ config OPLUS_CHIP_SOC_NODE
 	bool "OPLUS chip soc node"
 	help
 	  Say Y to include support
+
+source "drivers/power/oplus/test-kit/Kconfig"

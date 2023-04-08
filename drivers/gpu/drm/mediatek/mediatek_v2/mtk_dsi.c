@@ -390,6 +390,7 @@ extern unsigned int silence_mode;
 extern unsigned int oplus_display_brightness;
 extern unsigned long esd_flag;
 unsigned long long last_te_time = 0;
+extern unsigned int hpwm_fps_mode;
 //#ifdef OPLUS_BUG_STABILITY
 void mipi_dsi_dcs_write_gce(struct mtk_dsi *dsi, struct cmdq_pkt *handle,
 				  const void *data, size_t len);
@@ -4734,6 +4735,14 @@ static void mtk_dsi_config_trigger(struct mtk_ddp_comp *comp,
 							dsi->slave_dsi->ddp_comp.regs_pa + 0x10,
 							DSI_CM_MODE_WAIT_DATA_EVERY_LINE_EN,
 							DSI_CM_MODE_WAIT_DATA_EVERY_LINE_EN);
+#else
+				cmdq_pkt_write(handle, comp->cmdq_base, comp->regs_pa + 0x10,
+						0, DSI_CM_MODE_WAIT_DATA_EVERY_LINE_EN);
+				if (dsi->slave_dsi
+					&& ext->params->lcm_cmd_if == MTK_PANEL_DUAL_PORT)
+					cmdq_pkt_write(handle, dsi->slave_dsi->ddp_comp.cmdq_base,
+						dsi->slave_dsi->ddp_comp.regs_pa + 0x10,
+						0, DSI_CM_MODE_WAIT_DATA_EVERY_LINE_EN);
 #endif
 				cmdq_pkt_write(handle, comp->cmdq_base,
 					comp->regs_pa + DSI_CMD_TYPE1_HS,
@@ -9113,7 +9122,20 @@ static int mtk_dsi_io_cmd(struct mtk_ddp_comp *comp, struct cmdq_pkt *handle,
 					handle, minfps, m);
 		break;
 	}
+	case SET_MULTITE:
+	{
+		struct mtk_dsi *dsi =
+			container_of(comp, struct mtk_dsi, ddp_comp);
+		bool *enable = (bool *)params;
 
+		panel_ext = mtk_dsi_get_panel_ext(comp);
+		if (panel_ext && panel_ext->funcs
+			&& panel_ext->funcs->set_multite)
+			panel_ext->funcs->set_multite(dsi, dsi->panel,
+					mtk_dsi_cmdq_pack_gce,
+					handle, *enable);
+		break;
+	}
 	/* add for mux switch control */
 	case LCM_VSYNC_SWITCH:
 	{
@@ -9640,6 +9662,45 @@ static int mtk_dsi_io_cmd(struct mtk_ddp_comp *comp, struct cmdq_pkt *handle,
 			break;
 
 //#endif
+	case DSI_SET_HPWM:
+	{
+		struct mtk_dsi *dsi = container_of(comp, struct mtk_dsi, ddp_comp);
+
+		panel_ext = mtk_dsi_get_panel_ext(comp);
+
+		if (dsi->ext && dsi->ext->funcs
+			&& dsi->ext->funcs->lcm_high_pwm_set) {
+			DDPINFO("%s dsi set high pwm\n", __func__);
+			dsi->ext->funcs->lcm_high_pwm_set(dsi->panel,dsi,mtk_dsi_cmdq_pack_gce,handle,*(int *)params);
+		}
+	}
+		break;
+	case DSI_SET_HPWM_ELVSS:
+	{
+		struct mtk_dsi *dsi = container_of(comp, struct mtk_dsi, ddp_comp);
+
+		panel_ext = mtk_dsi_get_panel_ext(comp);
+
+		if (dsi->ext && dsi->ext->funcs
+			&& dsi->ext->funcs->lcm_high_pwm_elvss) {
+			DDPINFO("%s dsi set high pwm\n", __func__);
+			dsi->ext->funcs->lcm_high_pwm_elvss(dsi, mtk_dsi_cmdq_pack_gce, handle, *(int *)params);
+		}
+	}
+		break;
+	case DSI_SET_HPWM_FPS:
+	{
+		struct mtk_dsi *dsi = container_of(comp, struct mtk_dsi, ddp_comp);
+
+		panel_ext = mtk_dsi_get_panel_ext(comp);
+
+		if (dsi->ext && dsi->ext->funcs
+			&& dsi->ext->funcs->lcm_high_pwm_set_fps) {
+			DDPINFO("%s dsi set high pwm fps\n", __func__);
+			dsi->ext->funcs->lcm_high_pwm_set_fps(dsi, mtk_dsi_cmdq_pack_gce, handle, *(int *)params, hpwm_fps_mode);
+		}
+	}
+		break;
 
 	default:
 		break;

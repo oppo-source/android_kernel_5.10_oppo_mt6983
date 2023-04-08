@@ -27,6 +27,10 @@
 #include "deferred-free-helper.h"
 #include <uapi/linux/dma-buf.h>
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+#include "mm_osvelte/sys-memstat.h"
+#endif /* CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL */
+
 #include <linux/iommu.h>
 #include "mtk_heap_priv.h"
 #include "mtk_heap.h"
@@ -34,6 +38,10 @@
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL)
 #include "mm_boost_pool/oplus_boost_pool_mtk.h"
 #include "mm_boost_pool/trace_dma_buf.h"
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL)
+extern atomic64_t boost_pool_pages;
+#endif /* CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL */
 
 static struct boost_pool *mtk_mm_boost_pool;
 static struct boost_pool *mtk_mm_uncached_boost_pool;
@@ -1072,6 +1080,26 @@ static int set_heap_dev_dma(struct device *heap_dev)
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+long read_dmabuf_usage(enum mtrack_subtype type)
+{
+	if (type == MTRACK_DMABUF_SYSTEM_HEAP)
+		return atomic64_read(&dma_heap_normal_total) >> PAGE_SHIFT;
+	else if (type == MTRACK_DMABUF_POOL)
+		return global_node_page_state(NR_KERNEL_MISC_RECLAIMABLE);
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL)
+	else if (type == MTRACK_DMABUF_BOOST_POOL)
+		return atomic64_read(&boost_pool_pages);
+#endif /* CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL */
+
+	return 0;
+}
+
+static struct mtrack_debugger mtk_dmabuf_debugger = {
+	.mem_usage = read_dmabuf_usage,
+};
+#endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
+
 static int system_heap_create(void)
 {
 	struct dma_heap_export_info exp_info;
@@ -1147,6 +1175,10 @@ static int system_heap_create(void)
 	mb(); /* make sure we only set allocate after dma_mask is set */
 	mtk_mm_uncached_heap_ops.allocate = mtk_mm_uncached_heap_allocate;
 	pr_info("%s add heap[%s] success\n", __func__, exp_info.name);
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+	register_mtrack_debugger(MTRACK_DMABUF, &mtk_dmabuf_debugger);
+#endif /* CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL */
 	return 0;
 }
 

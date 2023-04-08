@@ -742,7 +742,7 @@ static char aw_rtp_name_162Hz[][AW_RTP_NAME_MAX] = {
 	{"aw8697_fingerprint_effect7_RTP_116.bin"},
 	{"aw8697_fingerprint_effect8_RTP_117.bin"},
 	{"aw8697_breath_simulation_RTP_118_162Hz.bin"},
-	{"aw8697_reserved_119.bin"},
+	{"aw8697_Telcel_Torreblanca_RTP_119_162Hz.bin"},
 
 	{"aw8697_Miss_RTP_120.bin"},
 	{"aw8697_Scenic_RTP_121_162Hz.bin"},
@@ -1082,7 +1082,7 @@ static char aw_rtp_name_166Hz[][AW_RTP_NAME_MAX] = {
 	{"aw8697_fingerprint_effect7_RTP_116.bin"},
 	{"aw8697_fingerprint_effect8_RTP_117.bin"},
 	{"aw8697_breath_simulation_RTP_118_166Hz.bin"},
-	{"aw8697_reserved_119.bin"},
+	{"aw8697_Telcel_Torreblanca_RTP_119_166Hz.bin"},
 
 	{"aw8697_Miss_RTP_120.bin"},
 	{"aw8697_Scenic_RTP_121_166Hz.bin"},
@@ -1420,7 +1420,7 @@ static char aw_rtp_name_174Hz[][AW_RTP_NAME_MAX] = {
 	{"aw8697_fingerprint_effect7_RTP_116.bin"},
 	{"aw8697_fingerprint_effect8_RTP_117.bin"},
 	{"aw8697_breath_simulation_RTP_118_174Hz.bin"},
-	{"aw8697_reserved_119.bin"},
+	{"aw8697_Telcel_Torreblanca_RTP_119_174Hz.bin"},
 
 	{"aw8697_Miss_RTP_120.bin"},
 	{"aw8697_Scenic_RTP_121_174Hz.bin"},
@@ -1760,7 +1760,7 @@ static char aw_rtp_name_178Hz[][AW_RTP_NAME_MAX] = {
 	{"aw8697_fingerprint_effect7_RTP_116.bin"},
 	{"aw8697_fingerprint_effect8_RTP_117.bin"},
 	{"aw8697_breath_simulation_RTP_118_178Hz.bin"},
-	{"aw8697_reserved_119.bin"},
+	{"aw8697_Telcel_Torreblanca_RTP_119_178Hz.bin"},
 
 	{"aw8697_Miss_RTP_120.bin"},
 	{"aw8697_Scenic_RTP_121_178Hz.bin"},
@@ -2447,7 +2447,7 @@ static char aw_rtp_name[][AW_RTP_NAME_MAX] = {
 	{"aw8697_fingerprint_effect7_RTP_116.bin"},
 	{"aw8697_fingerprint_effect8_RTP_117.bin"},
 	{"aw8697_breath_simulation_RTP_118.bin"},
-	{"aw8697_reserved_119.bin"},
+	{"aw8697_Telcel_Torreblanca_RTP_119.bin"},
 
 	{"aw8697_Miss_RTP_120.bin"},
 	{"aw8697_Scenic_RTP_121.bin"},
@@ -7849,6 +7849,8 @@ static void rtp_work_proc(struct work_struct *work)
 	uint32_t count = 100;
 	uint8_t reg_val = 0x10;
 	unsigned int write_start;
+	int cnt = 200;
+	bool rtp_work_flag = false;
 
 	opbuf = aw_haptic->start_buf;
 	count = 100;
@@ -7860,6 +7862,27 @@ static void rtp_work_proc(struct work_struct *work)
 			aw_haptic->func->set_rtp_aei(aw_haptic, true);
 			aw_haptic->func->irq_clear(aw_haptic);
 			aw_haptic->func->play_go(aw_haptic, true);
+
+			while (cnt) {
+				usleep_range(2000, 2500);
+				reg_val = aw_haptic->func->get_glb_state(aw_haptic);
+				if ((reg_val & AW_GLBRD_STATE_MASK) == AW_STATE_RTP) {
+					cnt = 0;
+					rtp_work_flag = true;
+					aw_dev_info("%s: RTP_GO! glb_state=0x08\n", __func__);
+				} else {
+					cnt--;
+					aw_dev_dbg("%s: wait for RTP_GO, glb_state=0x%02X\n",
+							__func__, reg_val);
+				}
+			}
+
+			if (!rtp_work_flag) {
+				aw_haptic->func->set_rtp_aei(aw_haptic, false);
+				aw_haptic->haptic_rtp_mode = false;
+				aw_dev_err("%s: failed to enter RTP_GO status!\n", __func__);
+				return;
+			}
 			mutex_unlock(&aw_haptic->lock);
 			break;
 		} else {

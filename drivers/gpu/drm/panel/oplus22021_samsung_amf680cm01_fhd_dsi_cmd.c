@@ -1057,6 +1057,12 @@ static int panel_doze_enable(struct drm_panel *panel, void *dsi, dcs_write_gce c
 {
 	unsigned int i = 0;
 
+	if (last_backlight == 0) {
+		aod_on_cmd[16].para_list[0] = 0x28;
+	} else {
+		aod_on_cmd[16].para_list[0] = 0x29;
+	}
+
 	for (i = 0; i < (sizeof(aod_on_cmd) / sizeof(struct LCM_setting_table)); i++) {
 		unsigned int cmd;
 		cmd = aod_on_cmd[i].cmd;

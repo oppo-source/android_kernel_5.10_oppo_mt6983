@@ -12,7 +12,7 @@ static kal_uint16 table_write_cmos_sensor(kal_uint16 *para, kal_uint32 len);
 
 static kal_uint16 init_setting[] = {
     0x0103, 0x01,
-    0x0102, 0x00,
+    0x0102, 0x01,
     0x0301, 0x48,
     0x0302, 0x31,
     0x0303, 0x04,

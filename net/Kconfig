@@ -478,5 +478,7 @@ config HAVE_EBPF_JIT
 
 source "net/oplus_connectivity_sla/Kconfig"
 
+source "net/oplus_connectivity_routerboost/Kconfig"
+
 source "net/oplus_wificapcenter/Kconfig"
 

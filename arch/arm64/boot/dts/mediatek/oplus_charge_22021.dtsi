@@ -26,11 +26,11 @@
 	mediatek,eye-vrt-host = <7>;
 	mediatek,eye-term-host = <7>;
 	mediatek,rev6-host = <3>;
-	mediatek,discth = <0xb>;
+	mediatek,discth = <0xd>;
 };
 
 &ssusb {
-	maximum-speed = "super-speed";
+	maximum-speed = "high-speed";
 };
 
 &uart0 {

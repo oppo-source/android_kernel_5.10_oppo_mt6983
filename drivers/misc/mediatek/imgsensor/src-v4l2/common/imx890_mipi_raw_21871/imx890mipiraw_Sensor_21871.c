@@ -66,6 +66,10 @@
 
 static kal_uint16 _i2c_data[_I2C_BUF_SIZE];
 static unsigned int _size_to_write;
+
+#define OTP_SIZE 0x4000
+static kal_uint8 otp_data[OTP_SIZE] = {0};
+
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 static kal_uint8 otp_flag;
 static kal_uint8 qsc_is_valid = 0;
@@ -113,6 +117,14 @@ static bool read_cmos_eeprom_p8(struct subdrv_ctx *ctx, kal_uint16 addr,
     }
     return true;
 }
+
+static void read_otp_info(struct subdrv_ctx *ctx)
+{
+	LOG_INF("read_otp_info begin\n");
+	read_cmos_eeprom_p8(ctx, 0, otp_data, OTP_SIZE);
+	LOG_INF("read_otp_info end\n");
+}
+
 #define   WRITE_DATA_MAX_LENGTH     (16)
 static kal_int32 table_write_eeprom_30Bytes(struct subdrv_ctx *ctx,
         kal_uint16 addr, kal_uint8 *para, kal_uint32 len)
@@ -917,7 +929,7 @@ static void read_sensor_Cali(struct subdrv_ctx *ctx)
     kal_uint8 tmp_QSC_setting[QSC_SIZE];
     kal_uint16 sensor_qsc = QSC_OTP_ADDR;
 #endif
-    kal_uint8 otp_data[9] = {0};
+    kal_uint8 otp_cali_data[9] = {0};
     int i = 0;
     u8 flag = 0;
     adaptor_i2c_rd_u8(ctx->i2c_client, IMX890_EEPROM_READ_ID_21871 >> 1, 0x000D, &flag);
@@ -929,13 +941,13 @@ static void read_sensor_Cali(struct subdrv_ctx *ctx)
     otp_flag = OTP_QSC_NONE;
 
     for (i = 0; i < 7; i++)
-        otp_data[i] = read_cmos_eeprom_8(ctx, 0x0006 + i);
+        otp_cali_data[i] = read_cmos_eeprom_8(ctx, 0x0006 + i);
 
-    if ((otp_data[0] == SENSOR_ID_L || otp_data[0] == SENSOR_ID_L_V2
-        || otp_data[0] == SENSOR_ID_IMX890_L) &&
-        (otp_data[1] == SENSOR_ID_H || otp_data[1] == SENSOR_ID_IMX890_H) &&
-        (otp_data[2] == LENS_ID_L) &&
-        (otp_data[3] == LENS_ID_H)) {
+    if ((otp_cali_data[0] == SENSOR_ID_L || otp_cali_data[0] == SENSOR_ID_L_V2
+        || otp_cali_data[0] == SENSOR_ID_IMX890_L) &&
+        (otp_cali_data[1] == SENSOR_ID_H || otp_cali_data[1] == SENSOR_ID_IMX890_H) &&
+        (otp_cali_data[2] == LENS_ID_L) &&
+        (otp_cali_data[3] == LENS_ID_H)) {
         LOG_DEBUG("OTP type: Custom Only");
         otp_flag = OTP_QSC_CUSTOM;
 #if SEQUENTIAL_WRITE_EN
@@ -3179,16 +3191,21 @@ static kal_uint32 get_fine_integ_line_by_scenario(struct subdrv_ctx *ctx,
 
 static kal_uint32 set_test_pattern_mode(struct subdrv_ctx *ctx, kal_uint32 mode)
 {
-    DEBUG_LOG(ctx, "mode: %d\n", mode);
-    //1:Solid Color 2:Color bar
+    LOG_INF("mode: %d\n", mode);
+    // 1:Solid Color 2:Color bar 5:black
     if (mode) {
-        if (5 == mode)
+        if (5 == mode){
             write_cmos_sensor_8(ctx, 0x020E, 0x00);
+            write_cmos_sensor_8(ctx, 0x0218, 0x00);
+            write_cmos_sensor_8(ctx, 0x3015, 0x00);
+        }
         else
             write_cmos_sensor_8(ctx, 0x0601, mode);
     } else if (ctx->test_pattern) {
         write_cmos_sensor_8(ctx, 0x0601, 0x00); /*No pattern*/
         write_cmos_sensor_8(ctx, 0x020E, 0x01);
+        write_cmos_sensor_8(ctx, 0x0218, 0x01);
+        write_cmos_sensor_8(ctx, 0x3015, 0x40);
     }
 
     ctx->test_pattern = mode;
@@ -3286,6 +3303,18 @@ static int feature_control(struct subdrv_ctx *ctx, MSDK_SENSOR_FEATURE_ENUM feat
         = (MSDK_SENSOR_REG_INFO_STRUCT *) feature_para;
 
     switch (feature_id) {
+	case SENSOR_FEATURE_GET_SENSOR_OTP_ALL:
+		{
+			LOG_INF("get otp data");
+			if(otp_data[0] == 0) {
+				read_otp_info(ctx);
+			} else {
+				LOG_INF("otp data has already read");
+			}
+			memcpy(feature_return_para_32, (UINT32 *)otp_data, sizeof(otp_data));
+			*feature_para_len = sizeof(otp_data);
+			break;
+		}
     case SENSOR_FEATURE_GET_OUTPUT_FORMAT_BY_SCENARIO:
         switch (*feature_data) {
         case SENSOR_SCENARIO_ID_NORMAL_CAPTURE:
@@ -3590,7 +3619,7 @@ static int feature_control(struct subdrv_ctx *ctx, MSDK_SENSOR_FEATURE_ENUM feat
             break;
         case EEPROM_STEREODATA_MW_MAIN:
         default:
-            read_imx890_eeprom_info_21871(ctx, EEPROM_META_STEREO_MT_MAIN_DATA,
+            read_imx890_eeprom_info_21871(ctx, EEPROM_META_STEREO_MW_MAIN_DATA,
                     (BYTE *)feature_return_para_32, *feature_para_len);
             break;
         }
@@ -4653,7 +4682,7 @@ static struct subdrv_pw_seq_entry pw_seq[] = {
     {HW_ID_AVDD1, 1804000, 3},
     {HW_ID_AFVDD, 2804000, 3},
     {HW_ID_DVDD, 1, 4},
-    {HW_ID_DOVDD, 1800000, 3},
+    {HW_ID_DOVDD, 1804000, 3},
     {HW_ID_MCLK_DRIVING_CURRENT, 4, 6},
     //{HW_ID_PDN, 1, 0},
     {HW_ID_RST, 1, 5}

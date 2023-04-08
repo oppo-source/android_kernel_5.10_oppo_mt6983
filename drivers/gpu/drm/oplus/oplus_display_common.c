@@ -38,6 +38,8 @@ extern unsigned int m_db;
 extern unsigned int m_dc;
 extern bool g_dp_support;
 extern bool pq_trigger;
+extern unsigned int hpwm_mode;
+
 
 extern struct drm_device* get_drm_device(void);
 extern int mtk_drm_setbacklight(struct drm_crtc *crtc, unsigned int level);
@@ -417,6 +419,90 @@ int oplus_display_panel_set_pq_trigger(void *buf)
         printk("%s pq_trigger=%d\n", __func__, pq_trigger);
 
         return 0;
+}
+
+inline bool pwm_turbo_support(void)
+{
+	struct drm_crtc *crtc;
+	struct mtk_drm_crtc *mtk_crtc;
+	struct drm_device *ddev = get_drm_device();
+
+	/* this debug cmd only for crtc0 */
+	crtc = list_first_entry(&(ddev)->mode_config.crtc_list,
+				typeof(*crtc), head);
+	if (!crtc) {
+		printk(KERN_ERR "find crtc fail\n");
+		return -1;
+	}
+	mtk_crtc = to_mtk_crtc(crtc);
+	if (!mtk_crtc || !mtk_crtc->panel_ext || !mtk_crtc->panel_ext->params) {
+		pr_err("falied to get lcd proc info\n");
+		return -EINVAL;
+	}
+	pr_err("pwm_turbo_support info %s\n", mtk_crtc->panel_ext->params->manufacture);
+	if(!strcmp(mtk_crtc->panel_ext->params->manufacture, "22823_Tianma_NT37705")) {
+		printk(KERN_ERR "support pwm turbo\n");
+		return true;
+	}
+	return false;
+}
+EXPORT_SYMBOL(pwm_turbo_support);
+
+int oplus_display_panel_set_pwm_status(void *data)
+{
+	int rc = 0;
+	struct drm_crtc *crtc;
+	struct drm_device *ddev = get_drm_device();
+	unsigned int *pwm_status = data;
+
+	if (!data) {
+		pr_err("%s: set pwm status data is null\n", __func__);
+		return -EINVAL;
+	}
+
+	printk(KERN_INFO "oplus high pwm mode = %d\n", *pwm_status);
+
+	crtc = list_first_entry(&(ddev)->mode_config.crtc_list,
+				typeof(*crtc), head);
+	if (!crtc) {
+		printk(KERN_ERR "find crtc fail\n");
+		return 0;
+	}
+
+	rc = mtk_crtc_set_high_pwm_switch(crtc, *pwm_status);
+	hpwm_mode = (long)*pwm_status;
+
+	return rc;
+}
+
+int oplus_display_panel_get_pwm_status(void *buf)
+{
+	struct drm_crtc *crtc;
+	struct mtk_drm_crtc *mtk_crtc;
+	struct drm_device *ddev = get_drm_device();
+	unsigned int *pwm_status = buf;
+
+	/* this debug cmd only for crtc0 */
+	crtc = list_first_entry(&(ddev)->mode_config.crtc_list,
+				typeof(*crtc), head);
+	if (!crtc) {
+		printk(KERN_ERR "find crtc fail\n");
+		return -1;
+	}
+	mtk_crtc = to_mtk_crtc(crtc);
+	if (!mtk_crtc || !mtk_crtc->panel_ext || !mtk_crtc->panel_ext->params) {
+		pr_err("falied to get lcd proc info\n");
+		return -EINVAL;
+	}
+
+	if (!strcmp(mtk_crtc->panel_ext->params->vendor, "22823_Tianma_NT37705")) {
+		*pwm_status = hpwm_mode;
+		pr_info("%s: high pwm mode = %d\n", __func__, hpwm_mode);
+	} else {
+		*pwm_status = 0;
+	}
+
+	return 0;
 }
 
 MODULE_AUTHOR("Xiaolei Gao <gaoxiaolei@oppo.com>");

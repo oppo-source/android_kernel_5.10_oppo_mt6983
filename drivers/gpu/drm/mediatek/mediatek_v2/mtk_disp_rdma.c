@@ -37,6 +37,10 @@
 //#include "swpm_me.h"
 //#ifdef OPLUS_ADFR
 #include "oplus_adfr.h"
+
+unsigned long long last_rdma_start_time = 0;
+extern int g_commit_pid;
+extern int oplus_adfr_cancel_fakeframe(void);
 //#endif
 /* #ifdef OPLUS_FEATURE_ONSCREENFINGERPRINT */
 /* add for ui ready */
@@ -274,12 +278,6 @@ static inline struct mtk_disp_rdma *comp_to_rdma(struct mtk_ddp_comp *comp)
 }
 
 int disp_met_set(void *data, u64 val);
-
-//#ifdef OPLUS_ADFR
-unsigned long long last_rdma_start_time = 0;
-extern int g_commit_pid;
-extern int oplus_adfr_cancel_fakeframe(void);
-//#endif
 
 /*#ifdef OPLUS_FEATURE_DISPLAY*/
 extern unsigned int get_project(void);

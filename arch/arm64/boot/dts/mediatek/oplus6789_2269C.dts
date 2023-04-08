@@ -647,6 +647,16 @@ oplus_boardid:oplus_boardid {
 		};
 	};
 };
+//ifdef OPLUS_FEATURE_SECURITY_COMMON
+&mtee_svp {
+     mtee: MTEE {
+         compatible = "mediatek,mtk_svp_on_mtee_support";
+    };
+    svp: SecureVideoPath {
+        compatible = "mediatek,mtk_sec_video_path_support";
+    };
+};
+//endif /* OPLUS_FEATURE_SECURITY_COMMON */
 /*add charger_ts_ntc sub_bat_temp_ntc flash_led_ntc for thermal  begin(2)*/
 &thermal_zones {
 	charger_ts_ntc: charger_ts_ntc {

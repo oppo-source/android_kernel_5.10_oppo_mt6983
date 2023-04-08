@@ -1132,6 +1132,7 @@ static struct mtk_panel_params ext_params = {
 	.data_rate = 598,
 	.cust_esd_check = 1,
 	.esd_check_enable = 1,
+	.esd_check_aod_status_again_skip = 1,
 	.lcm_esd_check_table[0] = {
 		.cmd = 0x0A, .count = 1, .para_list[0] = 0x9D, .mask_list[0] = 0x9D,
 	},
@@ -1141,6 +1142,7 @@ static struct mtk_panel_params ext_params = {
 	.lcm_esd_check_table[2] = {
 		.cmd = 0x05, .count = 1, .para_list[0] = 0x00,
 	},
+	.skip_unnecessary_switch = true,
 	.output_mode = MTK_PANEL_DSC_SINGLE_PORT,
 	.dsc_params = {
 		.enable = 1,
@@ -1202,6 +1204,7 @@ static struct mtk_panel_params ext_params = {
 	.before_hbm_en_delay_time =8000,
 	.oplus_dc_then_hbm_on = 0,
 	.oplus_display_global_dre = 1,
+	.use_free_pointer_check = 1,
 	.dyn_fps = {
             .switch_en = 1, .vact_timing_fps = 60,
         },
@@ -1216,6 +1219,7 @@ static struct mtk_panel_params ext_params_90hz = {
 	.data_rate = 598,
 	.cust_esd_check = 1,
 	.esd_check_enable = 1,
+	.esd_check_aod_status_again_skip = 1,
 	.lcm_esd_check_table[0] = {
 		.cmd = 0x0A, .count = 1, .para_list[0] = 0x9D, .mask_list[0] = 0x9D,
 	},
@@ -1225,6 +1229,7 @@ static struct mtk_panel_params ext_params_90hz = {
 	.lcm_esd_check_table[2] = {
 		.cmd = 0x05, .count = 1, .para_list[0] = 0x00,
 	},
+	.skip_unnecessary_switch = true,
 	.output_mode = MTK_PANEL_DSC_SINGLE_PORT,
     .dsc_params = {
         .enable = 1,
@@ -1281,6 +1286,7 @@ static struct mtk_panel_params ext_params_90hz = {
 	.before_hbm_en_delay_time =8000,
 	.oplus_dc_then_hbm_on = 0,
 	.oplus_display_global_dre = 1,
+	.use_free_pointer_check = 1,
 
 	.dyn_fps = {
             .switch_en = 1, .vact_timing_fps = 90,

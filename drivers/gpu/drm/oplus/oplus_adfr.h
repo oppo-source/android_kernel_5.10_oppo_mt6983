@@ -33,6 +33,7 @@
 /* --------------- adfr misc ---------------*/
 void oplus_adfr_init(struct drm_device *dev, struct mtk_drm_private *priv);
 inline bool oplus_adfr_is_support(void);
+inline bool oplus_adfr_fakeframe_is_enable(void);
 ssize_t oplus_adfr_get_debug(struct kobject *obj,
 	struct kobj_attribute *attr, char *buf);
 ssize_t oplus_adfr_set_debug(struct kobject *obj,
@@ -72,7 +73,14 @@ bool oplus_adfr_auto_on_cmd_filter_set(bool enable);
 bool oplus_adfr_auto_on_cmd_filter_get(void);
 void oplus_adfr_handle_auto_mode(int prop_id, unsigned int propval);
 void oplus_adfr_dsi_display_auto_mode_update(struct drm_device *drm);
+int oplus_adfr_temperature_detection_handle(void *mtk_ddp_comp, void *cmdq_pkt, int ntc_temp, int shell_temp);
 void oplus_adfr_status_reset(struct drm_display_mode *src_m, struct drm_display_mode *dst_m);
+
+/* add a timer for mutex multi te and set backlight*/
+enum hrtimer_restart oplus_adfr_osync_mode_timer_handler(struct hrtimer *timer);
+int oplus_adfr_osync_mode_timer_start(int deferred_ms);
+void oplus_adfr_oplus_mode_multi_te_update(struct drm_device *drm);
+void oplus_adfr_osync_mode_work_handler(struct work_struct *work_item);
 
 /* --------------- idle mode -------------- */
 /* ADFR:Add for idle mode control */

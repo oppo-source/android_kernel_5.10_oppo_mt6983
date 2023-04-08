@@ -416,6 +416,9 @@ struct mtk_panel_params {
 	struct mtk_ddic_dsi_cmd send_cmd_to_ddic;
 	unsigned int cust_esd_check;
 	unsigned int esd_check_enable;
+	/* #ifdef OPLUS_FEATURE */
+	unsigned int esd_check_aod_status_again_skip;
+	/* #endif */ /* OPLUS_BUG_STABILITY */
 	struct esd_check_item lcm_esd_check_table[ESD_CHECK_NUM];
 	unsigned int ssc_enable;
 	unsigned int ssc_range;
@@ -499,6 +502,7 @@ struct mtk_panel_params {
 	bool color_dual_panel_status;
 	bool color_dual_brightness_status;
 	bool color_oplus_calibrate_status;
+	bool f_high_pwm_en;
 	/* #endif */ /* OPLUS_BUG_STABILITY */
 	/* #ifdef OPLUS_FEATURE_ONSCREENFINGERPRINT */
 	/* check how many black frames are inserted in aod off cmd flow which will affect hbm on cmd execution time, then calculate delay time to keep apart aod off cmd and hbm on cmd to make sure ui ready is accurate */
@@ -520,6 +524,7 @@ struct mtk_panel_params {
 	/*#ifdef OPLUS_FEATURE_DISPLAY*/
 	unsigned int prete_offset;
 	/*#endif*/
+	unsigned int use_free_pointer_check;
 };
 
 struct mtk_panel_ext {
@@ -672,6 +677,9 @@ struct mtk_panel_funcs {
 	int (*esd_check_precondition)(void *dsi, dcs_write_gce cb, void *handle);
 	/*#ifdef OPLUS_BUG_STABILITY*/
 	int (*lcm_osc_change)(void *dsi, dcs_write_gce cb, void *handle, bool en);
+	int (*lcm_high_pwm_set)(struct drm_panel *panel, void *dsi, dcs_write_gce_pack cb, void *handle, bool en_h_pwm);
+	int (*lcm_high_pwm_elvss)(void *dsi, dcs_write_gce_pack cb, void *handle, bool en_h_pwm);
+	int (*lcm_high_pwm_set_fps)(void *dsi, dcs_write_gce_pack cb, void *handle, int fps, bool en_h_pwm);
 	void (*cabc_switch)(void *dsi_drv, dcs_write_gce cb,void *handle, unsigned int cabc_mode);
 	int (*lcm_dc_post_enter)(void *dsi_drv, dcs_write_gce cb,
 		void *handle);

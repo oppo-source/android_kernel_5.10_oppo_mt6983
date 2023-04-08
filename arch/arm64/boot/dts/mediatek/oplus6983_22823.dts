@@ -953,6 +953,15 @@
 		<1>; /*MTK_DRM_OPT_PRE_TE*/
 };
 
+/* #ifdef OPLUS_FEATURE_DISPLAY */
+&mt6373_adc {
+	vin1_100k {
+		channel = <AUXADC_VIN1>;
+		pures = <ADC_PURES_100K>;
+	};
+};
+/* #endif */ /* OPLUS_FEATURE_DISPLAY */
+
 &dsi0 {
 	status = "okay";
 	#address-cells = <1>;
@@ -962,11 +971,7 @@
 		reg = <1>;
 		vddr1p5-enable-gpios = <&pio 148 0>;
 		reset-gpios = <&pio 86 0>;
-//#ifdef OPLUS_ADFR
-		/* add for mux switch control */
 		//te_switch-gpios = <&pio 24 0>;
-		oplus-adfr-config = <13>;
-//#endif
 		te_out-gpios = <&pio 36 0>;
 		aod_en-gpios = <&mt6373_pio 3 0>;
 		1p8-supply = <&mt6363_vufs18>;
@@ -982,8 +987,14 @@
 	panel5@0 {
 		compatible = "oplus22823,tm,nt37705,cmd";
 		reg = <0>;
+		io-channels = <&mt6373_adc (ADC_PURES_100K_MASK | AUXADC_VIN1)>;
+		io-channel-names = "panel-channel";
 		vddr-enable-gpios = <&pio 148 0>;
 		reset-gpios = <&pio 86 0>;
+//#ifdef OPLUS_ADFR
+		/* add for mux switch control */
+		oplus-adfr-config = <33>;
+//#endif
 		te_switch-gpios = <&pio 36 0>;
 		te_out-gpios = <&pio 24 0>;
 		vddr-aod-en-gpios = <&mt6373_pio 3 0>;
