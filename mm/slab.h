@@ -169,7 +169,7 @@ static inline slab_flags_t kmem_cache_flags(unsigned int object_size,
 #define SLAB_CACHE_FLAGS (SLAB_NOLEAKTRACE | SLAB_RECLAIM_ACCOUNT | \
 			  SLAB_TEMPORARY | SLAB_ACCOUNT)
 #else
-#define SLAB_CACHE_FLAGS (0)
+#define SLAB_CACHE_FLAGS (SLAB_NOLEAKTRACE)
 #endif
 
 /* Common flags available with current configuration */
@@ -352,6 +352,7 @@ static inline void mod_objcg_state(struct obj_cgroup *objcg,
 
 	rcu_read_lock();
 	memcg = obj_cgroup_memcg(objcg);
+	/* FIXME: chp lruvec no care! */
 	lruvec = mem_cgroup_lruvec(memcg, pgdat);
 	mod_memcg_lruvec_state(lruvec, idx, nr);
 	rcu_read_unlock();

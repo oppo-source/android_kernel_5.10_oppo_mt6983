@@ -9,7 +9,11 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
+//#ifdef OPLUS_FEATURE_RF_PMIC_OCP
+#if IS_ENABLED(CONFIG_MTK_AEE_FEATURE)
 #include <aee.h>
+#endif
+//#endif /* OPLUS_FEATURE_RF_PMIC_OCP */
 #include <mtk_ccci_common.h>
 
 #define NOTIFY_TIMES_MAX	2
@@ -59,10 +63,8 @@ static struct oc_debug_t mt6855_oc_debug[] = {
 	REG_OC_DEBUG(mt6363_va12_1),
 	REG_OC_DEBUG(mt6363_va12_2),
 	REG_OC_DEBUG(mt6363_va15),
-	REG_OC_DEBUG(mt6369_vibr),
 	REG_OC_DEBUG(mt6369_vio28),
 	REG_OC_DEBUG(mt6369_vfp),
-	REG_OC_DEBUG(mt6369_vtp),
 	REG_OC_DEBUG(mt6369_vusb),
 	REG_OC_DEBUG(mt6369_vaud28),
 	REG_OC_DEBUG(mt6369_vcn33_1),
@@ -72,6 +74,7 @@ static struct oc_debug_t mt6855_oc_debug[] = {
 	REG_OC_DEBUG(mt6369_vmc),
 	REG_OC_DEBUG(mt6369_vant18),
 	REG_OC_DEBUG(mt6369_vaux18),
+	MD_REG_OC_DEBUG(VPA, BIT(0)),
 };
 
 static struct oc_debug_t mt6879_oc_debug[] = {
@@ -100,15 +103,14 @@ static struct oc_debug_t mt6879_oc_debug[] = {
 	REG_OC_DEBUG(mt6368_vrf13_aif),
 	REG_OC_DEBUG(mt6368_vrf18_aif),
 	REG_OC_DEBUG(mt6368_vant18),
-	REG_OC_DEBUG(mt6368_vibr),
 	REG_OC_DEBUG(mt6368_vio28),
 	REG_OC_DEBUG(mt6368_vfp),
-	REG_OC_DEBUG(mt6368_vtp),
 	REG_OC_DEBUG(mt6368_vmch),
 	REG_OC_DEBUG(mt6368_vmc),
 	REG_OC_DEBUG(mt6368_vcn33_1),
 	REG_OC_DEBUG(mt6368_vcn33_2),
 	REG_OC_DEBUG(mt6368_vefuse),
+	MD_REG_OC_DEBUG(VPA, BIT(0)),
 };
 
 static struct oc_debug_t mt6983_oc_debug[] = {
@@ -148,10 +150,8 @@ static struct oc_debug_t mt6983_oc_debug[] = {
 	REG_OC_DEBUG(mt6373_vefuse),
 	REG_OC_DEBUG(mt6373_vmch),
 	REG_OC_DEBUG(mt6373_vmc),
-	REG_OC_DEBUG(mt6373_vibr),
 	REG_OC_DEBUG(mt6373_vio28),
 	REG_OC_DEBUG(mt6373_vfp),
-	REG_OC_DEBUG(mt6373_vtp),
 };
 
 static struct oc_debug_info mt6855_debug_info = {
@@ -171,12 +171,14 @@ static struct oc_debug_info mt6983_debug_info = {
 
 static int md_oc_notify(struct oc_debug_t *oc_dbg)
 {
+#if IS_ENABLED(CONFIG_MTK_ECCCI_DRIVER)
 	int ret;
 
 	ret = exec_ccci_kern_func_by_md_id(MD_SYS1, ID_PMIC_INTR,
 					   &oc_dbg->md_data, 4);
 	if (ret)
 		pr_notice("[%s]-exec_ccci fail:%d\n", __func__, ret);
+#endif
 	return 0;
 }
 
@@ -192,21 +194,29 @@ static int regulator_oc_notify(struct notifier_block *nb, unsigned long event,
 
 	oc_dbg = container_of(nb, struct oc_debug_t, nb);
 	oc_dbg->times++;
-	if (oc_dbg->times > NOTIFY_TIMES_MAX)
+	//#ifdef OPLUS_FEATURE_RF_PMIC_OCP
+	if (oc_dbg->times > NOTIFY_TIMES_MAX) {
+		if (oc_dbg->is_md_reg)
+			md_oc_notify(oc_dbg);
 		return NOTIFY_OK;
-
+	}
+	//#endif /* OPLUS_FEATURE_RF_PMIC_OCP */
 	pr_notice("regulator:%s OC %d times\n",
 		  oc_dbg->name, oc_dbg->times);
 	len += snprintf(oc_str, 30, "PMIC OC:%s", oc_dbg->name);
 	if (oc_dbg->is_md_reg) {
-		aee_kernel_warning(oc_str,
-				   "\nCRDISPATCH_KEY:MD OC\nOC Interrupt: %s",
-				   oc_dbg->name);
+	//#ifdef OPLUS_FEATURE_RF_PMIC_OCP
+		if (IS_ENABLED(CONFIG_MTK_AEE_FEATURE))
+			aee_kernel_warning(oc_str, "\nCRDISPATCH_KEY:MD OC\nOC Interrupt: %s"
+					   , oc_dbg->name);
+	//#endif /* OPLUS_FEATURE_RF_PMIC_OCP */
 		md_oc_notify(oc_dbg);
 	} else if (oc_dbg->times == NOTIFY_TIMES_MAX) {
-		aee_kernel_warning(oc_str,
-				   "\nCRDISPATCH_KEY:PMIC OC\nOC Interrupt: %s",
-				   oc_dbg->name);
+	//#ifdef OPLUS_FEATURE_RF_PMIC_OCP
+		if (IS_ENABLED(CONFIG_MTK_AEE_FEATURE))
+			aee_kernel_warning(oc_str, "\nCRDISPATCH_KEY:PMIC OC\nOC Interrupt: %s"
+					   , oc_dbg->name);
+	//#endif /* OPLUS_FEATURE_RF_PMIC_OCP */
 	}
 	return NOTIFY_OK;
 }

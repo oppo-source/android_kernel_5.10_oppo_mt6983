@@ -43,6 +43,7 @@
 #include <asm/tlbflush.h>
 #include <linux/swapops.h>
 #include <linux/swap_cgroup.h>
+#include <trace/hooks/mm.h>
 
 static bool swap_count_continued(struct swap_info_struct *, pgoff_t,
 				 unsigned char);
@@ -98,7 +99,7 @@ static atomic_t proc_poll_event = ATOMIC_INIT(0);
 
 atomic_t nr_rotate_swap = ATOMIC_INIT(0);
 
-static struct swap_info_struct *swap_type_to_swap_info(int type)
+struct swap_info_struct *swap_type_to_swap_info(int type)
 {
 	if (type >= READ_ONCE(nr_swapfiles))
 		return NULL;
@@ -106,6 +107,7 @@ static struct swap_info_struct *swap_type_to_swap_info(int type)
 	smp_rmb();	/* Pairs with smp_wmb in alloc_swap_info. */
 	return READ_ONCE(swap_info[type]);
 }
+EXPORT_SYMBOL_GPL(swap_type_to_swap_info);
 
 static inline unsigned char swap_count(unsigned char ent)
 {
@@ -263,7 +265,13 @@ static void discard_swap_cluster(struct swap_info_struct *si,
 }
 
 #ifdef CONFIG_THP_SWAP
-#define SWAPFILE_CLUSTER	HPAGE_PMD_NR
+
+/*Todo: allow the coexistence of HPAGE_PMD_NR and HPAGE_CONT_PTE_NR */
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+#define SWAPFILE_CLUSTER HPAGE_CONT_PTE_NR
+#else
+#define SWAPFILE_CLUSTER HPAGE_PMD_NR
+#endif
 
 #define swap_entry_size(size)	(size)
 #else
@@ -280,6 +288,14 @@ static void discard_swap_cluster(struct swap_info_struct *si,
 static inline void cluster_set_flag(struct swap_cluster_info *info,
 	unsigned int flag)
 {
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+	if ((flag ==  CLUSTER_FLAG_FREE) && (info->flags & CLUSTER_FLAG_DOUBLE_MAP))
+		swap_cluster_double_mapped--;
+	if ((flag !=  CLUSTER_FLAG_FREE) && (info->flags & CLUSTER_FLAG_DOUBLE_MAP)) {
+		pr_err("@@@@@@FIXME %s flag:old:%d new:%d\n", __func__, info->flags, flag);
+		CHP_BUG_ON(1);
+	}
+#endif
 	info->flags = flag;
 }
 
@@ -297,6 +313,15 @@ static inline void cluster_set_count(struct swap_cluster_info *info,
 static inline void cluster_set_count_flag(struct swap_cluster_info *info,
 					 unsigned int c, unsigned int f)
 {
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+	if ((f ==  CLUSTER_FLAG_FREE) && (info->flags & CLUSTER_FLAG_DOUBLE_MAP))
+		swap_cluster_double_mapped--;
+	if ((f !=  CLUSTER_FLAG_FREE && f != 0) && (info->flags & CLUSTER_FLAG_DOUBLE_MAP)) {
+		pr_err("@@@@@@FIXME %s flag:old:%d new:%d\n", __func__, info->flags, f);
+		CHP_BUG_ON(1);
+	}
+#endif
+
 	info->flags = f;
 	info->data = c;
 }
@@ -712,6 +737,7 @@ static void swap_range_free(struct swap_info_struct *si, unsigned long offset,
 	unsigned long begin = offset;
 	unsigned long end = offset + nr_entries - 1;
 	void (*swap_slot_free_notify)(struct block_device *, unsigned long);
+	bool skip = false;
 
 	if (offset < si->lowest_bit)
 		si->lowest_bit = offset;
@@ -722,7 +748,9 @@ static void swap_range_free(struct swap_info_struct *si, unsigned long offset,
 		if (was_full && (si->flags & SWP_WRITEOK))
 			add_to_avail_list(si);
 	}
-	atomic_long_add(nr_entries, &nr_swap_pages);
+	trace_android_vh_account_swap_pages(si, &skip);
+	if (!skip)
+		atomic_long_add(nr_entries, &nr_swap_pages);
 	si->inuse_pages -= nr_entries;
 	if (si->flags & SWP_BLKDEV)
 		swap_slot_free_notify =
@@ -732,8 +760,21 @@ static void swap_range_free(struct swap_info_struct *si, unsigned long offset,
 	while (offset <= end) {
 		arch_swap_invalidate_page(si->type, offset);
 		frontswap_invalidate_page(si->type, offset);
+#ifdef CONFIG_CONT_PTE_HUGEPAGE_64K_ZRAM
+		if (is_thp_swap(si)) {
+			//swap_slot_free_notify only when cluster is free.
+			unsigned long index = offset / SWAPFILE_CLUSTER;
+
+			if (swap_slot_free_notify && cluster_is_free(&si->cluster_info[index]))
+				swap_slot_free_notify(si->bdev, index);
+		} else {
+			if (swap_slot_free_notify)
+				swap_slot_free_notify(si->bdev, offset);
+		}
+#else
 		if (swap_slot_free_notify)
 			swap_slot_free_notify(si->bdev, offset);
+#endif
 		offset++;
 	}
 	clear_shadow_from_swap_cache(si->type, begin, end);
@@ -767,7 +808,7 @@ static void set_cluster_next(struct swap_info_struct *si, unsigned long next)
 	this_cpu_write(*si->cluster_next_cpu, next);
 }
 
-static int scan_swap_map_slots(struct swap_info_struct *si,
+int scan_swap_map_slots(struct swap_info_struct *si,
 			       unsigned char usage, int nr,
 			       swp_entry_t slots[])
 {
@@ -983,8 +1024,9 @@ no_page:
 	si->flags -= SWP_SCANNING;
 	return n_ret;
 }
+EXPORT_SYMBOL_GPL(scan_swap_map_slots);
 
-static int swap_alloc_cluster(struct swap_info_struct *si, swp_entry_t *slot)
+int swap_alloc_cluster(struct swap_info_struct *si, swp_entry_t *slot)
 {
 	unsigned long idx;
 	struct swap_cluster_info *ci;
@@ -1018,6 +1060,7 @@ static int swap_alloc_cluster(struct swap_info_struct *si, swp_entry_t *slot)
 
 	return 1;
 }
+EXPORT_SYMBOL_GPL(swap_alloc_cluster);
 
 static void swap_free_cluster(struct swap_info_struct *si, unsigned long idx)
 {
@@ -1047,6 +1090,33 @@ static unsigned long scan_swap_map(struct swap_info_struct *si,
 
 }
 
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+bool thp_swap_is_free(void)
+{
+	bool ret = false;
+	int type = 0;
+	unsigned long tot, free;
+
+	spin_lock(&swap_lock);
+	for (type = 0; type < nr_swapfiles; type++) {
+		struct swap_info_struct *si = swap_info[type];
+
+		if (is_thp_swap(si)) {
+			if ((si->flags & SWP_USED) && !(si->flags & SWP_WRITEOK))
+				goto out;
+
+			free = si->pages - si->inuse_pages;
+			tot = si->pages;
+			ret = free > (tot >> 6);
+			goto out;
+		}
+	}
+out:
+	spin_unlock(&swap_lock);
+	return ret;
+}
+#endif
+
 int get_swap_pages(int n_goal, swp_entry_t swp_entries[], int entry_size)
 {
 	unsigned long size = swap_entry_size(entry_size);
@@ -1073,6 +1143,10 @@ int get_swap_pages(int n_goal, swp_entry_t swp_entries[], int entry_size)
 start_over:
 	node = numa_node_id();
 	plist_for_each_entry_safe(si, next, &swap_avail_heads[node], avail_lists[node]) {
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+		if ((entry_size == SWAPFILE_CLUSTER) ^ is_thp_swap(si))
+			continue;
+#endif
 		/* requeue si to after same-priority siblings */
 		plist_requeue(&si->avail_lists[node], &swap_avail_heads[node]);
 		spin_unlock(&swap_avail_lock);
@@ -1104,9 +1178,13 @@ start_over:
 			goto check_out;
 		pr_debug("scan_swap_map of si %d failed to find offset\n",
 			si->type);
+		cond_resched();
 
 		spin_lock(&swap_avail_lock);
 nextsi:
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+		goto done;
+#endif
 		/*
 		 * if we got here, it's likely that si was almost full before,
 		 * and since scan_swap_map() can drop the si->lock, multiple
@@ -1122,6 +1200,9 @@ nextsi:
 			goto start_over;
 	}
 
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+done:
+#endif
 	spin_unlock(&swap_avail_lock);
 
 check_out:
@@ -1137,6 +1218,7 @@ swp_entry_t get_swap_page_of_type(int type)
 {
 	struct swap_info_struct *si = swap_type_to_swap_info(type);
 	pgoff_t offset;
+	bool skip = false;
 
 	if (!si)
 		goto fail;
@@ -1146,7 +1228,9 @@ swp_entry_t get_swap_page_of_type(int type)
 		/* This is called for allocating swap entry, not cache */
 		offset = scan_swap_map(si, 1);
 		if (offset) {
-			atomic_long_dec(&nr_swap_pages);
+			trace_android_vh_account_swap_pages(si, &skip);
+			if (!skip)
+				atomic_long_dec(&nr_swap_pages);
 			spin_unlock(&si->lock);
 			return swp_entry(type, offset);
 		}
@@ -1198,6 +1282,9 @@ static struct swap_info_struct *_swap_info_get(swp_entry_t entry)
 
 bad_free:
 	pr_err("swap_info_get: %s%08lx\n", Unused_offset, entry.val);
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+	pr_err("%s-%d thp swap:%d\n", current->comm, current->pid, is_thp_swap(p));
+#endif
 out:
 	return NULL;
 }
@@ -1478,6 +1565,7 @@ void swapcache_free_entries(swp_entry_t *entries, int n)
 	if (p)
 		spin_unlock(&p->lock);
 }
+EXPORT_SYMBOL_GPL(swapcache_free_entries);
 
 /*
  * How many references to page are currently swapped out?
@@ -1673,7 +1761,11 @@ static int page_trans_huge_map_swapcount(struct page *page, int *total_mapcount,
 	}
 	if (map)
 		ci = lock_cluster(si, offset);
+#ifndef CONFIG_CONT_PTE_HUGEPAGE
 	for (i = 0; i < HPAGE_PMD_NR; i++) {
+#else
+	for (i = 0; i < HPAGE_CONT_PTE_NR; i++) {
+#endif
 		mapcount = atomic_read(&page[i]._mapcount) + 1;
 		_total_mapcount += mapcount;
 		if (map) {
@@ -1685,7 +1777,11 @@ static int page_trans_huge_map_swapcount(struct page *page, int *total_mapcount,
 	unlock_cluster(ci);
 	if (PageDoubleMap(page)) {
 		map_swapcount -= 1;
+#ifndef CONFIG_CONT_PTE_HUGEPAGE
 		_total_mapcount -= HPAGE_PMD_NR;
+#else
+		_total_mapcount -= HPAGE_CONT_PTE_NR;
+#endif
 	}
 	mapcount = compound_mapcount(page);
 	map_swapcount += mapcount;
@@ -1727,6 +1823,10 @@ bool reuse_swap_page(struct page *page, int *total_map_swapcount)
 			page = compound_head(page);
 			delete_from_swap_cache(page);
 			SetPageDirty(page);
+#if defined(CONFIG_CONT_PTE_HUGEPAGE) && CONFIG_REUSE_SWP_ACCOUNT_DEBUG
+			if (PageTransCompound(page))
+				atomic64_inc(&perf_stat.reuse_swp_count[NORMAL_REUSE_SWP_NO_WB]);
+#endif
 		} else {
 			swp_entry_t entry;
 			struct swap_info_struct *p;
@@ -1734,6 +1834,10 @@ bool reuse_swap_page(struct page *page, int *total_map_swapcount)
 			entry.val = page_private(page);
 			p = swap_info_get(entry);
 			if (p->flags & SWP_STABLE_WRITES) {
+#if defined(CONFIG_CONT_PTE_HUGEPAGE) && CONFIG_REUSE_SWP_ACCOUNT_DEBUG
+				if (PageTransCompound(page))
+					atomic64_inc(&perf_stat.reuse_swp_count[NORMAL_REUSE_SWP_WB]);
+#endif
 				spin_unlock(&p->lock);
 				return false;
 			}
@@ -1741,8 +1845,68 @@ bool reuse_swap_page(struct page *page, int *total_map_swapcount)
 		}
 	}
 
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+	if (count <= 1 && PageTransCompound(page) && PageWriteback(page)) {
+#if CONFIG_REUSE_SWP_ACCOUNT_DEBUG
+		atomic64_inc(&perf_stat.reuse_swp_count[NORMAL_REUSE_SWP_WB_ERR]);
+#endif
+		return false;
+	}
+#endif
+
 	return count <= 1;
 }
+
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+bool reuse_swap_cont_pte_page(struct page *page, int *total_map_swapcount)
+{
+	int count, total_mapcount, total_swapcount;
+
+	VM_BUG_ON_PAGE(!PageLocked(page), page);
+	if (unlikely(PageKsm(page)))
+		return false;
+	count = page_trans_huge_map_swapcount(page, &total_mapcount,
+					      &total_swapcount);
+	if (total_map_swapcount)
+		*total_map_swapcount = total_mapcount + total_swapcount;
+	if (count == 1 && PageSwapCache(page) &&
+	    (unlikely(!PageTransCompound(page)) ||
+	     /* for cont_pte hugepages, we are reusing the whole pages in swapin */
+	     ((total_swapcount == HPAGE_CONT_PTE_NR || !total_swapcount) && ContPteHugePage(page)))) {
+		if (!PageWriteback(page)) {
+			page = compound_head(page);
+			delete_from_swap_cache(page);
+			SetPageDirty(page);
+#if CONFIG_REUSE_SWP_ACCOUNT_DEBUG
+			atomic64_inc(&perf_stat.reuse_swp_count[CHP_REUSE_SWP_NO_WB]);
+#endif
+		} else {
+			swp_entry_t entry;
+			struct swap_info_struct *p;
+
+			entry.val = page_private(page);
+			p = swap_info_get(entry);
+			if (p->flags & SWP_STABLE_WRITES) {
+#if CONFIG_REUSE_SWP_ACCOUNT_DEBUG
+				atomic64_inc(&perf_stat.reuse_swp_count[CHP_REUSE_SWP_WB]);
+#endif
+				spin_unlock(&p->lock);
+				return false;
+			}
+			spin_unlock(&p->lock);
+		}
+	}
+
+	if (count <= 1 && PageTransCompound(page) && PageWriteback(page)) {
+#if CONFIG_REUSE_SWP_ACCOUNT_DEBUG
+		atomic64_inc(&perf_stat.reuse_swp_count[CHP_REUSE_SWP_WB_ERR]);
+#endif
+		return false;
+	}
+
+	return count <= 1;
+}
+#endif
 
 /*
  * If swap is getting full, or if there are no more mappings of this page,
@@ -2007,6 +2171,7 @@ static int unuse_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
 		}
 
 		try_to_free_swap(page);
+		trace_android_vh_unuse_swap_page(si, page);
 		unlock_page(page);
 		put_page(page);
 
@@ -2245,6 +2410,7 @@ retry:
 		lock_page(page);
 		wait_on_page_writeback(page);
 		try_to_free_swap(page);
+		trace_android_vh_unuse_swap_page(si, page);
 		unlock_page(page);
 		put_page(page);
 
@@ -2499,10 +2665,14 @@ static void setup_swap_info(struct swap_info_struct *p, int prio,
 
 static void _enable_swap_info(struct swap_info_struct *p)
 {
-	p->flags |= SWP_WRITEOK | SWP_VALID;
-	atomic_long_add(p->pages, &nr_swap_pages);
-	total_swap_pages += p->pages;
+	bool skip = false;
 
+	p->flags |= SWP_WRITEOK | SWP_VALID;
+	trace_android_vh_account_swap_pages(p, &skip);
+	if (!skip) {
+		atomic_long_add(p->pages, &nr_swap_pages);
+		total_swap_pages += p->pages;
+	}
 	assert_spin_locked(&swap_lock);
 	/*
 	 * both lists are plists, and thus priority ordered.
@@ -2574,6 +2744,7 @@ SYSCALL_DEFINE1(swapoff, const char __user *, specialfile)
 	struct filename *pathname;
 	int err, found = 0;
 	unsigned int old_block_size;
+	bool skip = false;
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
@@ -2628,8 +2799,11 @@ SYSCALL_DEFINE1(swapoff, const char __user *, specialfile)
 		least_priority++;
 	}
 	plist_del(&p->list, &swap_active_head);
-	atomic_long_sub(p->pages, &nr_swap_pages);
-	total_swap_pages -= p->pages;
+	trace_android_vh_account_swap_pages(p, &skip);
+	if (!skip) {
+		atomic_long_sub(p->pages, &nr_swap_pages);
+		total_swap_pages -= p->pages;
+	}
 	p->flags &= ~SWP_WRITEOK;
 	spin_unlock(&p->lock);
 	spin_unlock(&swap_lock);
@@ -2670,6 +2844,11 @@ SYSCALL_DEFINE1(swapoff, const char __user *, specialfile)
 		atomic_dec(&nr_rotate_swap);
 
 	mutex_lock(&swapon_mutex);
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+	if (is_thp_swap(p))
+		pr_info("swapoff No.%d thp swap\n", p->type);
+#endif
+
 	spin_lock(&swap_lock);
 	spin_lock(&p->lock);
 	drain_mmlist();
@@ -2881,12 +3060,16 @@ late_initcall(max_swapfiles_check);
 
 static struct swap_info_struct *alloc_swap_info(void)
 {
-	struct swap_info_struct *p;
+	struct swap_info_struct *p = NULL;
 	struct swap_info_struct *defer = NULL;
 	unsigned int type;
 	int i;
+	bool skip = false;
 
-	p = kvzalloc(struct_size(p, avail_lists, nr_node_ids), GFP_KERNEL);
+	trace_android_rvh_alloc_si(&p, &skip);
+	trace_android_vh_alloc_si(&p, &skip);
+	if (!skip)
+		p = kvzalloc(struct_size(p, avail_lists, nr_node_ids), GFP_KERNEL);
 	if (!p)
 		return ERR_PTR(-ENOMEM);
 
@@ -3369,6 +3552,7 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 		  (swap_flags & SWAP_FLAG_PRIO_MASK) >> SWAP_FLAG_PRIO_SHIFT;
 	enable_swap_info(p, prio, swap_map, cluster_info, frontswap_map);
 
+	trace_android_vh_init_swap_info_struct(p, swap_avail_heads);
 	pr_info("Adding %uk swap on %s.  Priority:%d extents:%d across:%lluk %s%s%s%s%s\n",
 		p->pages<<(PAGE_SHIFT-10), name->name, p->prio,
 		nr_extents, (unsigned long long)span<<(PAGE_SHIFT-10),
@@ -3378,6 +3562,15 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 		(p->flags & SWP_PAGE_DISCARD) ? "c" : "",
 		(frontswap_map) ? "FS" : "");
 
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+	/*
+	 * this is used to check whether add a normal swap device where is just
+	 * for base page.
+	 */
+	if (is_thp_swap(p))
+		CHP_BUG_ON(p->bdev->bd_disk->android_kabi_reserved1 != THP_SWAP_PRIO_MAGIC);
+	pr_info("swapon %s_swap\n", is_thp_swap(p) ? "chp" : "normal");
+#endif
 	mutex_unlock(&swapon_mutex);
 	atomic_inc(&proc_poll_event);
 	wake_up_interruptible(&proc_poll_wait);
@@ -3433,8 +3626,10 @@ void si_swapinfo(struct sysinfo *val)
 	spin_lock(&swap_lock);
 	for (type = 0; type < nr_swapfiles; type++) {
 		struct swap_info_struct *si = swap_info[type];
+		bool skip = false;
 
-		if ((si->flags & SWP_USED) && !(si->flags & SWP_WRITEOK))
+		trace_android_vh_si_swapinfo(si, &skip);
+		if (!skip && (si->flags & SWP_USED) && !(si->flags & SWP_WRITEOK))
 			nr_to_be_unused += si->inuse_pages;
 	}
 	val->freeswap = atomic_long_read(&nr_swap_pages) + nr_to_be_unused;
@@ -3560,6 +3755,7 @@ struct swap_info_struct *swp_swap_info(swp_entry_t entry)
 {
 	return swap_type_to_swap_info(swp_type(entry));
 }
+EXPORT_SYMBOL_GPL(swp_swap_info);
 
 struct swap_info_struct *page_swap_info(struct page *page)
 {

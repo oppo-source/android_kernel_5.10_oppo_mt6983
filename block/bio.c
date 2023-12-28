@@ -575,7 +575,8 @@ void bio_truncate(struct bio *bio, unsigned new_size)
 				offset = new_size - done;
 			else
 				offset = 0;
-			zero_user(bv.bv_page, offset, bv.bv_len - offset);
+			zero_user(bv.bv_page, bv.bv_offset + offset,
+				  bv.bv_len - offset);
 			truncated = true;
 		}
 		done += bv.bv_len;
@@ -689,7 +690,10 @@ void __bio_clone_fast(struct bio *bio, struct bio *bio_src)
 	bio->bi_write_hint = bio_src->bi_write_hint;
 	bio->bi_iter = bio_src->bi_iter;
 	bio->bi_io_vec = bio_src->bi_io_vec;
-
+#ifdef CONFIG_DEVICE_XCOPY
+	if (op_is_copy(bio->bi_opf))
+		bio->bi_private = bio_src->bi_private;
+#endif
 	bio_clone_blkg_association(bio, bio_src);
 	blkcg_bio_issue_init(bio);
 }
@@ -1055,9 +1059,6 @@ static int __bio_iov_append_get_pages(struct bio *bio, struct iov_iter *iter)
 	unsigned len, i;
 	size_t offset;
 	int ret = 0;
-
-	if (WARN_ON_ONCE(!max_append_sectors))
-		return 0;
 
 	/*
 	 * Move page array up in the allocated memory for the bio vecs as far as

@@ -16,7 +16,11 @@
 //#include "mmpath.h"
 #endif
 
+#if IS_ENABLED(CONFIG_ARCH_DMA_ADDR_T_64BIT)
 #define MTK_DRM_TRACE_MSG_LEN	1024
+#else
+#define MTK_DRM_TRACE_MSG_LEN	896
+#endif
 
 static noinline int tracing_mark_write(const char *buf)
 {
@@ -44,6 +48,9 @@ void mtk_drm_print_trace(char *fmt, ...)
 
 	tracing_mark_write(buf);
 }
+#ifdef OPLUS_FEATURE_DISPLAY
+EXPORT_SYMBOL(mtk_drm_print_trace);
+#endif /* OPLUS_FEATURE_DISPLAY */
 
 void drm_trace_tag_start(const char *tag)
 {
@@ -60,7 +67,12 @@ void drm_trace_tag_mark(const char *tag)
 	mtk_drm_print_trace("C|%d|%s|%d\n", DRM_TRACE_ID, tag, 1);
 	mtk_drm_print_trace("C|%d|%s|%d\n", DRM_TRACE_ID, tag, 0);
 }
-
+#if defined(CONFIG_PXLW_IRIS)
+void drm_trace_tag_value(const char *tag, unsigned int value)
+{
+	mtk_drm_print_trace("C|%d|%s|%d\n", DRM_TRACE_ID, tag, value);
+}
+#endif
 void mtk_drm_refresh_tag_start(struct mtk_ddp_comp *ddp_comp)
 {
 	char tag_name[30] = {'\0'};

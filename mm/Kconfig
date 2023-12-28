@@ -767,10 +767,18 @@ config DEFERRED_STRUCT_PAGE_INIT
 	  lifetime of the system until these kthreads finish the
 	  initialisation.
 
+config PAGE_IDLE_FLAG
+	bool
+	select PAGE_EXTENSION if !64BIT
+	help
+	  This adds PG_idle and PG_young flags to 'struct page'.  PTE Accessed
+	  bit writers can set the state of the bit in the flags so that PTE
+	  Accessed bit readers may avoid disturbance.
+
 config IDLE_PAGE_TRACKING
 	bool "Enable idle page tracking"
 	depends on SYSFS && MMU
-	select PAGE_EXTENSION if !64BIT
+	select PAGE_IDLE_FLAG
 	help
 	  This feature allows to estimate the amount of user pages that have
 	  not been touched during a given period of time. This information can
@@ -846,7 +854,7 @@ config SPECULATIVE_PAGE_FAULT
        bool "Speculative page faults"
        default y
        depends on ARCH_SUPPORTS_SPECULATIVE_PAGE_FAULT
-       depends on MMU && SMP
+       depends on MMU && SMP && !NUMA
        help
          Try to handle user space page faults without holding the mmap_sem.
 
@@ -898,5 +906,39 @@ config ARCH_HAS_HUGEPD
 
 config MAPPING_DIRTY_HELPERS
         bool
+
+#ifdef OPLUS_FEATURE_PERFORMANCE_MM
+source "mm/oplus_mm/Kconfig"
+#endif /* OPLUS_FEATURE_PERFORMANCE_MM */
+source "mm/damon/Kconfig"
+
+config CONT_PTE_HUGEPAGE
+	bool "Cont Pte Hugepage support"
+	default y
+	depends on ARM64 && TRANSPARENT_HUGEPAGE
+	help
+	  Try to THP-like Hugepages based on ARM64 cont-pte.
+
+config CONT_PTE_HUGEPAGE_ON_EXT4
+	bool "Cont Pte Hugepage support on EXT4"
+	default n
+	depends on CONT_PTE_HUGEPAGE
+	help
+	  Try to THP-like Hugepages based on ARM64 cont-pte on ext4
+
+config CONT_PTE_HUGEPAGE_ON_QEMU
+	bool "Cont Pte Hugepage support on QEMU"
+	default n
+	depends on CONT_PTE_HUGEPAGE
+	help
+	  QEMU debugging of ContPte hugepage
+
+config CONT_PTE_HUGEPAGE_64K_ZRAM
+	bool "Cont Pte Hugepage support 64K ZRAM"
+	default y
+	depends on CONT_PTE_HUGEPAGE
+
+	help
+	  Cont Pte Hugepage support 64K ZRAM
 
 endmenu

@@ -9,12 +9,15 @@
 static const int regulator_voltage[] = {
 	REGULATOR_VOLTAGE_0,
 	REGULATOR_VOLTAGE_1000,
+	REGULATOR_VOLTAGE_1050,
 	REGULATOR_VOLTAGE_1100,
+	REGULATOR_VOLTAGE_1150,
 	REGULATOR_VOLTAGE_1200,
 	REGULATOR_VOLTAGE_1210,
 	REGULATOR_VOLTAGE_1220,
 	REGULATOR_VOLTAGE_1500,
 	REGULATOR_VOLTAGE_1800,
+	REGULATOR_VOLTAGE_2200,
 	REGULATOR_VOLTAGE_2500,
 	REGULATOR_VOLTAGE_2800,
 	REGULATOR_VOLTAGE_2900,
@@ -23,6 +26,7 @@ static const int regulator_voltage[] = {
 struct REGULATOR_CTRL regulator_control[REGULATOR_TYPE_MAX_NUM] = {
 	{"vcama"},
 	{"vcama1"},
+	{"vcamaf"},
 	{"vcamd"},
 	{"vcamio"},
 };
@@ -111,8 +115,7 @@ static enum IMGSENSOR_RETURN regulator_set(
 	if (pin > IMGSENSOR_HW_PIN_DOVDD   ||
 	    pin < IMGSENSOR_HW_PIN_AVDD    ||
 	    pin_state < IMGSENSOR_HW_PIN_STATE_LEVEL_0 ||
-	    pin_state >= IMGSENSOR_HW_PIN_STATE_LEVEL_HIGH ||
-	    sensor_idx < 0)
+	    pin_state >= IMGSENSOR_HW_PIN_STATE_LEVEL_HIGH)
 		return IMGSENSOR_RETURN_ERROR;
 
 	reg_type_offset = REGULATOR_TYPE_VCAMA;

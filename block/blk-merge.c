@@ -7,6 +7,9 @@
 #include <linux/bio.h>
 #include <linux/blkdev.h>
 #include <linux/scatterlist.h>
+#ifndef __GENKSYMS__
+#include <linux/blk-cgroup.h>
+#endif
 
 #include <trace/events/block.h>
 
@@ -313,6 +316,10 @@ void __blk_queue_split(struct bio **bio, unsigned int *nr_segs)
 		split = blk_bio_write_same_split(q, *bio, &q->bio_split,
 				nr_segs);
 		break;
+#ifdef CONFIG_DEVICE_XCOPY
+	case REQ_OP_DEVICE_COPY:
+		break;
+#endif
 	default:
 		/*
 		 * All drivers must accept single-segments bios that are <=
@@ -389,6 +396,10 @@ unsigned int blk_recalc_rq_segments(struct request *rq)
 		return 0;
 	case REQ_OP_WRITE_SAME:
 		return 1;
+#ifdef CONFIG_DEVICE_XCOPY
+	case REQ_OP_DEVICE_COPY:
+		return 0;
+#endif
 	}
 
 	rq_for_each_bvec(bv, rq, iter)
@@ -554,6 +565,9 @@ static inline unsigned int blk_rq_get_max_segments(struct request *rq)
 static inline int ll_new_hw_segment(struct request *req, struct bio *bio,
 		unsigned int nr_phys_segs)
 {
+	if (!blk_cgroup_mergeable(req, bio))
+		goto no_merge;
+
 	if (blk_integrity_merge_bio(req->q, req, bio) == false)
 		goto no_merge;
 
@@ -648,6 +662,9 @@ static int ll_merge_requests_fn(struct request_queue *q, struct request *req,
 
 	total_phys_segments = req->nr_phys_segments + next->nr_phys_segments;
 	if (total_phys_segments > blk_rq_get_max_segments(req))
+		return 0;
+
+	if (!blk_cgroup_mergeable(req, next->bio))
 		return 0;
 
 	if (blk_integrity_merge_rq(q, req, next) == false)
@@ -794,6 +811,8 @@ static struct request *attempt_merge(struct request_queue *q,
 	if (!blk_discard_mergable(req))
 		elv_merge_requests(q, req, next);
 
+	blk_crypto_rq_put_keyslot(next);
+
 	/*
 	 * 'next' is going away, so update stats accordingly
 	 */
@@ -859,6 +878,10 @@ bool blk_rq_merge_ok(struct request *rq, struct bio *bio)
 
 	/* must be same device */
 	if (rq->rq_disk != bio->bi_disk)
+		return false;
+
+	/* don't merge across cgroup boundaries */
+	if (!blk_cgroup_mergeable(rq, bio))
 		return false;
 
 	/* only merge integrity protected bio into ditto rq */

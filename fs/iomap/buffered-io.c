@@ -175,6 +175,22 @@ iomap_read_page_end_io(struct bio_vec *bvec, int error)
 	struct page *page = bvec->bv_page;
 	struct iomap_page *iop = to_iomap_page(page);
 
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+	if (PageCont(page)) {
+		/*NOTE: This scenario does not support PageCont!*/
+		CHP_BUG_ON(page_has_private(page));
+		if (unlikely(error)) {
+			ClearPageUptodate(page);
+			SetPageError(page);
+		}
+
+		if (!iop || atomic_sub_and_test(bvec->bv_len,
+		    &iop->read_bytes_pending))
+			set_cont_pte_uptodate_and_unlock(page);
+		return;
+	}
+#endif
+
 	if (unlikely(error)) {
 		ClearPageUptodate(page);
 		SetPageError(page);
@@ -528,7 +544,8 @@ iomap_write_failed(struct inode *inode, loff_t pos, unsigned len)
 	 * write started inside the existing inode size.
 	 */
 	if (pos + len > i_size)
-		truncate_pagecache_range(inode, max(pos, i_size), pos + len);
+		truncate_pagecache_range(inode, max(pos, i_size),
+					 pos + len - 1);
 }
 
 static int
@@ -1045,7 +1062,7 @@ iomap_finish_page_writeback(struct inode *inode, struct page *page,
 
 	if (error) {
 		SetPageError(page);
-		mapping_set_error(inode->i_mapping, -EIO);
+		mapping_set_error(inode->i_mapping, error);
 	}
 
 	WARN_ON_ONCE(i_blocks_per_page(inode, page) > 1 && !iop);
@@ -1456,13 +1473,6 @@ iomap_do_writepage(struct page *page, struct writeback_control *wbc, void *data)
 	 */
 	if (WARN_ON_ONCE((current->flags & (PF_MEMALLOC|PF_KSWAPD)) ==
 			PF_MEMALLOC))
-		goto redirty;
-
-	/*
-	 * Given that we do not allow direct reclaim to call us, we should
-	 * never be called in a recursive filesystem reclaim context.
-	 */
-	if (WARN_ON_ONCE(current->flags & PF_MEMALLOC_NOFS))
 		goto redirty;
 
 	/*

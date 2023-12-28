@@ -57,12 +57,12 @@ int qos_ipi_to_sspm_scmi_command(unsigned int cmd, unsigned int p1, unsigned int
 	struct scmi_tinysys_status rvalue = {0};
 
 	mutex_lock(&qos_ipi_mutex);
-	if (cmd < 0) {
+
+	if (cmd >= NR_QOS_IPI) {
 		pr_info("qos ipi cmd get error %d\n",
 			cmd);
 		goto error;
 	}
-
 	if (qos_sspm_ready != 1) {
 		pr_info("qos ipi not ready, skip cmd=%d\n", cmd);
 		goto error;
@@ -121,6 +121,12 @@ void qos_ipi_init(struct mtk_qos *qos)
 	unsigned int ret;
 
 	_tinfo = get_scmi_tinysys_info();
+#ifdef OPLUS_FEATURE_CHG_BASIC
+	if (!_tinfo) {
+		pr_err("%s _tinfo is NULL\n", __func__);
+		return;
+	}
+#endif
 
 	ret = of_property_read_u32(_tinfo->sdev->dev.of_node, "scmi_qos",
 			&scmi_qos_id);
