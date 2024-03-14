@@ -248,6 +248,7 @@
 #define PHY_MODE_BC11_SW_CLR 2
 #define PHY_MODE_DPDMPULLDOWN_SET 3
 #define PHY_MODE_DPDMPULLDOWN_CLR 4
+
 #define PHY_MODE_DPPULLUP_SET 5
 #define PHY_MODE_DPPULLUP_CLR 6
 
@@ -1549,12 +1550,16 @@ static void u2_phy_props_set(struct mtk_xsphy *xsphy,
 		writel(tmp, pbase + XSP_USBPHYACR6);
 	}
 
+#ifndef OPLUS_FEATURE_CHG_BASIC
 	if (inst->rev6) {
+#endif
 		tmp = readl(pbase + XSP_USBPHYACR6);
 		tmp &= ~P2A6_RG_U2_PHY_REV6;
 		tmp |= P2A6_RG_U2_PHY_REV6_VAL(inst->rev6);
 		writel(tmp, pbase + XSP_USBPHYACR6);
+#ifndef OPLUS_FEATURE_CHG_BASIC
 	}
+#endif
 }
 
 static void u2_phy_host_props_set(struct mtk_xsphy *xsphy,
@@ -1584,12 +1589,16 @@ static void u2_phy_host_props_set(struct mtk_xsphy *xsphy,
 		writel(tmp, pbase + XSP_USBPHYACR1);
 	}
 
+#ifndef OPLUS_FEATURE_CHG_BASIC
 	if (inst->rev6_host) {
+#endif
 		tmp = readl(pbase + XSP_USBPHYACR6);
 		tmp &= ~P2A6_RG_U2_PHY_REV6;
 		tmp |= P2A6_RG_U2_PHY_REV6_VAL(inst->rev6_host);
 		writel(tmp, pbase + XSP_USBPHYACR6);
+#ifndef OPLUS_FEATURE_CHG_BASIC
 	}
+#endif
 }
 
 static void u3_phy_props_set(struct mtk_xsphy *xsphy,
