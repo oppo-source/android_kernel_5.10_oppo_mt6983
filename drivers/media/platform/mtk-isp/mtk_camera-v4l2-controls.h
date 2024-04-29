@@ -6,6 +6,10 @@
 #ifndef __MTK_CAMERA_V4l2_CONTROLS_H
 #define __MTK_CAMERA_V4l2_CONTROLS_H
 
+#ifndef OPLUS_FEATURE_CAMERA_COMMON
+#define OPLUS_FEATURE_CAMERA_COMMON
+#endif
+
 #include <linux/videodev2.h>
 #include <linux/v4l2-controls.h>
 
@@ -23,7 +27,8 @@
  * The base for the mediatek sensor driver controls
  * We reserve 48 controls for this driver.
  */
-#define V4L2_CID_USER_MTK_SENSOR_BASE		(V4L2_CID_USER_MTK_CAM_BASE + 0x200)
+#define V4L2_CID_USER_MTK_SENSOR_1ST_BASE	(V4L2_CID_USER_MTK_CAM_BASE + 0x200)
+#define V4L2_CID_USER_MTK_SENSOR_BASE		(V4L2_CID_USER_MTK_CAM_BASE + 0x250)
 
 /**
  * The base for the mediatek seninf driver controls
@@ -75,6 +80,10 @@
 	(V4L2_CID_USER_MTK_CAM_BASE + 20)
 #define V4L2_CID_MTK_CAM_CAMSYS_HW_MODE \
 	(V4L2_CID_USER_MTK_CAM_BASE + 21)
+#define V4L2_CID_MTK_CAM_FRAME_SYNC \
+	(V4L2_CID_USER_MTK_CAM_BASE + 22)
+#define V4L2_CID_MTK_CAM_CAMSYS_VF_RESET \
+	(V4L2_CID_USER_MTK_CAM_BASE + 23)
 
 /* Allowed value of V4L2_CID_MTK_CAM_RAW_PATH_SELECT */
 #define V4L2_MTK_CAM_RAW_PATH_SELECT_BPC	1
@@ -219,22 +228,49 @@ struct mtk_cam_resource {
 	__u8 status;
 };
 
+enum mtk_cam_ctrl_type {
+	CAM_SET_CTRL = 0,
+	CAM_TRY_CTRL,
+	CAM_CTRL_NUM,
+};
+
 /**
  * struct mtk_cam_pde_info - PDE module information for raw
  *
  * @pdo_max_size: the max pdo size of pde sensor.
  * @pdi_max_size: the max pdi size of pde sensor or max pd table size.
  * @pd_table_offset: the offest of meta config for pd table content.
+ * @meta_cfg_size: the enlarged meta config size.
+ * @meta_0_size: the enlarged meta 0 size.
  */
 struct mtk_cam_pde_info {
 	__u32 pdo_max_size;
 	__u32 pdi_max_size;
 	__u32 pd_table_offset;
+	__u32 meta_cfg_size;
+	__u32 meta_0_size;
 };
 
 /* I M G S Y S */
 
 /* I M A G E  S E N S O R */
+
+#define V4L2_CID_FRAME_SYNC \
+	(V4L2_CID_USER_MTK_SENSOR_1ST_BASE + 1)
+
+#define V4L2_CID_FSYNC_ASYNC_MASTER \
+	(V4L2_CID_USER_MTK_SENSOR_1ST_BASE + 2)
+
+#define V4L2_CID_MTK_MSTREAM_MODE \
+	(V4L2_CID_USER_MTK_SENSOR_1ST_BASE + 3)
+
+#define V4L2_CID_MTK_N_1_MODE \
+	(V4L2_CID_USER_MTK_SENSOR_1ST_BASE + 4)
+
+
+
+
+
 #define V4L2_CID_MTK_TEMPERATURE \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 1)
 
@@ -271,69 +307,74 @@ struct mtk_cam_pde_info {
 #define V4L2_CID_MTK_HDR_TRI_GAIN \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 12)
 
-#define V4L2_CID_FRAME_SYNC \
+#define V4L2_CID_MTK_MAX_FPS \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 13)
 
-#define V4L2_CID_MTK_MAX_FPS \
+#define V4L2_CID_MTK_STAGGER_AE_CTRL \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 14)
 
-#define V4L2_CID_MTK_STAGGER_AE_CTRL \
+#define V4L2_CID_SEAMLESS_SCENARIOS \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 15)
 
-#define V4L2_CID_SEAMLESS_SCENARIOS \
+#define V4L2_CID_MTK_STAGGER_INFO \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 16)
 
-#define V4L2_CID_MTK_STAGGER_INFO \
+#define V4L2_CID_STAGGER_TARGET_SCENARIO \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 17)
 
-#define V4L2_CID_STAGGER_TARGET_SCENARIO \
+#define V4L2_CID_START_SEAMLESS_SWITCH \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 18)
 
-#define V4L2_CID_START_SEAMLESS_SWITCH \
+#define V4L2_CID_MTK_DEBUG_CMD \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 19)
 
-#define V4L2_CID_MTK_DEBUG_CMD \
+#define V4L2_CID_MAX_EXP_TIME \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 20)
 
-#define V4L2_CID_MAX_EXP_TIME \
+#define V4L2_CID_MTK_SENSOR_PIXEL_RATE \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 21)
 
-#define V4L2_CID_MTK_SENSOR_PIXEL_RATE \
+#define V4L2_CID_MTK_FRAME_DESC \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 22)
 
-#define V4L2_CID_MTK_FRAME_DESC \
+#define V4L2_CID_MTK_SENSOR_STATIC_PARAM \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 23)
 
-#define V4L2_CID_MTK_SENSOR_STATIC_PARAM \
+#define V4L2_CID_MTK_SENSOR_POWER \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 24)
 
-#define V4L2_CID_MTK_SENSOR_POWER \
+#define V4L2_CID_MTK_CUST_SENSOR_PIXEL_RATE \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 25)
 
-#define V4L2_CID_MTK_MSTREAM_MODE \
+#define V4L2_CID_MTK_CSI_PARAM \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 26)
 
-#define V4L2_CID_MTK_N_1_MODE \
+#define V4L2_CID_MTK_SENSOR_TEST_PATTERN_DATA \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 27)
 
-#define V4L2_CID_MTK_CUST_SENSOR_PIXEL_RATE \
+#define V4L2_CID_MTK_SENSOR_RESET \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 28)
 
-#define V4L2_CID_MTK_CSI_PARAM \
+#define V4L2_CID_MTK_SENSOR_INIT \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 29)
 
-#define V4L2_CID_MTK_SENSOR_TEST_PATTERN_DATA \
+#define V4L2_CID_MTK_SOF_TIMEOUT_VALUE \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 30)
 
-#define V4L2_CID_MTK_SENSOR_RESET \
+#define V4L2_CID_MTK_SENSOR_RESET_S_STREAM \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 31)
 
-#define V4L2_CID_MTK_SENSOR_INIT \
+#define V4L2_CID_MTK_SENSOR_RESET_BY_USER \
 	(V4L2_CID_USER_MTK_SENSOR_BASE + 32)
 
-#define V4L2_CID_MTK_SOF_TIMEOUT_VALUE \
-	(V4L2_CID_USER_MTK_SENSOR_BASE + 33)
+#define V4L2_CID_MTK_DO_NOT_POWER_ON \
+	(V4L2_CID_USER_MTK_SENSOR_BASE + 36)
 
+#define V4L2_CID_MTK_SENSOR_MODE_CONFIG_INFO \
+	(V4L2_CID_USER_MTK_SENSOR_BASE + 37)
+
+#define V4L2_CID_MTK_SENSOR_IN_RESET \
+	(V4L2_CID_USER_MTK_SENSOR_BASE + 38)
 
 
 /* S E N I N F */
@@ -345,5 +386,16 @@ struct mtk_cam_pde_info {
 
 #define V4L2_CID_VSYNC_NOTIFY \
 	(V4L2_CID_USER_MTK_SENINF_BASE + 3)
+
+#define V4L2_CID_FSYNC_LISTEN_TARGET \
+	(V4L2_CID_USER_MTK_SENINF_BASE + 5)
+
+#define V4L2_CID_UPDATE_SOF_CNT \
+	(V4L2_CID_USER_MTK_SENINF_BASE + 7)
+
+#ifdef OPLUS_FEATURE_CAMERA_COMMON
+#define V4L2_CID_GET_CSI2_IRQ_STATUS \
+	(V4L2_CID_USER_MTK_SENINF_BASE + 8)
+#endif
 
 #endif /* __MTK_CAMERA_V4l2_CONTROLS_H */

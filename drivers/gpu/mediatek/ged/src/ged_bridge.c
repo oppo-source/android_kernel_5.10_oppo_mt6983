@@ -63,11 +63,20 @@ int ged_bridge_monitor_3D_fence(
 	struct GED_BRIDGE_IN_MONITOR3DFENCE *psMonitor3DFenceINT,
 	struct GED_BRIDGE_OUT_MONITOR3DFENCE *psMonitor3DFenceOUT)
 {
+	unsigned int force_timeout_setting = force_fence_timeout_dump(true);
 	if (psMonitor3DFenceINT->dump_flag == 1) {
 		mtk_gpu_fence_debug_dump(
 			psMonitor3DFenceINT->fd,
 			psMonitor3DFenceINT->pid,
-			psMonitor3DFenceINT->eType);
+			psMonitor3DFenceINT->eType,
+			psMonitor3DFenceINT->timeouts);
+		psMonitor3DFenceOUT->eError = GED_OK;
+	} else if (force_timeout_setting > 0){
+		mtk_gpu_fence_debug_dump(
+			psMonitor3DFenceINT->fd,
+			psMonitor3DFenceINT->pid,
+			psMonitor3DFenceINT->eType,
+			force_timeout_setting);
 		psMonitor3DFenceOUT->eError = GED_OK;
 	} else {
 		psMonitor3DFenceOUT->eError =
@@ -170,7 +179,7 @@ int ged_bridge_gpu_hint_to_cpu(
 		struct GED_BRIDGE_OUT_GPU_HINT_TO_CPU *out)
 {
 	int ret = 0;
-#ifdef CONFIG_MTK_FPSGO_V3
+#if defined(CONFIG_MTK_FPSGO_V3) && IS_MODULE(CONFIG_MTK_GPU_SUPPORT)
 	ret = fpsgo_notify_gpu_block(in->tid, in->i32BridgeFD, in->hint);
 #endif
 	out->eError = GED_OK;

@@ -46,6 +46,7 @@ enum MTK_TIMELINE_ENUM {
 	MTK_TIMELINE_SECONDARY_PRESENT_TIMELINE_ID,
 	MTK_TIMELINE_SF_PRIMARY_PRESENT_TIMELINE_ID,
 	MTK_TIMELINE_SF_SECONDARY_PRESENT_TIMELINE_ID,
+	MTK_TIMELINE_SP_PRESENT_TIMELINE_ID,
 	MTK_TIMELINE_COUNT,
 };
 
@@ -177,6 +178,8 @@ disp_get_session_sync_info(unsigned int session_id);
 void mtk_release_session_fence(unsigned int session_id);
 struct mtk_fence_info *mtk_fence_get_layer_info(unsigned int session_id,
 						unsigned int timeline_id);
+
+int mtk_fence_curr_idx(unsigned int session_id, unsigned int layer_id);
 
 #ifdef __cplusplus
 } /* extern C */

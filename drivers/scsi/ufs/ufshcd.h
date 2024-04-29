@@ -721,6 +721,11 @@ struct ufs_hba_monitor {
 	bool enabled;
 };
 
+#ifdef CONFIG_SCSI_BATCH_UNMAP
+struct ufs_fastdiscard_hba {
+	u32 fastdiscard_enable;
+};
+#endif
 /**
  * struct ufs_hba - per adapter private structure
  * @mmio_base: UFSHCI base register address
@@ -739,6 +744,7 @@ struct ufs_hba_monitor {
  * @capabilities: UFS Controller Capabilities
  * @nutrs: Transfer Request Queue depth supported by controller
  * @nutmrs: Task Management Queue depth supported by controller
+ * @reserved_slot: Used to submit device commands. Protected by @dev_cmd.lock.
  * @ufs_version: UFS Version to which controller complies
  * @vops: pointer to variant specific operations
  * @priv: pointer to variant specific private data
@@ -827,6 +833,12 @@ struct ufs_hba {
 	u32 capabilities;
 	int nutrs;
 	int nutmrs;
+#if 0
+	/*
+	 * This has been moved into struct ufs_hba_add_info because of the GKI.
+	 */
+	u32 reserved_slot;
+#endif
 	u32 ufs_version;
 	const struct ufs_hba_variant_ops *vops;
 	struct ufs_hba_variant_params *vps;
@@ -1295,18 +1307,6 @@ static inline int ufshcd_vops_pwr_change_notify(struct ufs_hba *hba,
 					dev_max_params, dev_req_params);
 
 	return -ENOTSUPP;
-}
-
-static inline void ufshcd_vops_setup_xfer_req(struct ufs_hba *hba, int tag,
-					bool is_scsi_cmd)
-{
-	if (hba->vops && hba->vops->setup_xfer_req) {
-		unsigned long flags;
-
-		spin_lock_irqsave(hba->host->host_lock, flags);
-		hba->vops->setup_xfer_req(hba, tag, is_scsi_cmd);
-		spin_unlock_irqrestore(hba->host->host_lock, flags);
-	}
 }
 
 static inline void ufshcd_vops_setup_task_mgmt(struct ufs_hba *hba,

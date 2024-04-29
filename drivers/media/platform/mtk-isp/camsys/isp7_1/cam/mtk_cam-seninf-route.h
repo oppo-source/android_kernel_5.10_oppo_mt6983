@@ -26,6 +26,7 @@ int mtk_cam_seninf_is_di_enabled(struct seninf_ctx *ctx, u8 ch, u8 dt);
 int notify_fsync_cammux_usage(struct seninf_ctx *ctx);
 void notify_fsync_cammux_usage_with_kthread(struct seninf_ctx *ctx);
 int mtk_cam_seninf_get_csi_param(struct seninf_ctx *ctx);
+u8 is_reset_by_user(struct seninf_ctx *ctx);
 int reset_sensor(struct seninf_ctx *ctx);
 
 
@@ -33,5 +34,7 @@ int reset_sensor(struct seninf_ctx *ctx);
 void mtk_cam_seninf_alloc_cam_mux(struct seninf_ctx *ctx);
 void mtk_cam_seninf_release_cam_mux(struct seninf_ctx *ctx);
 #endif
+
+bool has_multiple_expo_mode(struct seninf_ctx *ctx);
 
 #endif

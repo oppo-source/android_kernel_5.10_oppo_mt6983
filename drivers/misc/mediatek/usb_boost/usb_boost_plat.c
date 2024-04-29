@@ -28,6 +28,17 @@ static struct icc_path *usb_icc_path;
 unsigned int peak_bw;
 struct device *gdev;
 
+#if IS_ENABLED(CONFIG_USB_STORAGE)
+static int freq_hold(struct act_arg_obj *arg)
+{
+	return 0;
+}
+
+static int freq_release(struct act_arg_obj *arg)
+{
+	return 0;
+}
+#else
 static int freq_hold(struct act_arg_obj *arg)
 {
 
@@ -81,6 +92,7 @@ static int freq_release(struct act_arg_obj *arg)
 	}
 	return 0;
 }
+#endif
 
 static int core_hold(struct act_arg_obj *arg)
 {
@@ -262,6 +274,31 @@ int audio_freq_hold(void)
 		}
 	}
 
+	if (of_device_is_compatible(np, "mediatek,mt6855-usb_boost") ||
+		of_device_is_compatible(np, "mediatek,mt6789-usb_boost")) {
+		device_property_read_u32(gdev, "small-core", &(cpu_freq_audio[0]));
+		device_property_read_u32(gdev, "big-core", &(cpu_freq_audio[1]));
+
+		USB_BOOST_NOTICE("%s: request cpu freq(%d) (%d)\n", __func__,
+			cpu_freq_audio[0], cpu_freq_audio[1]);
+
+		list_for_each_entry(req_policy, &usb_policy_list, list) {
+			if (req_policy->policy->cpu == 0 && cpu_freq_audio[0] > 0)
+				ret = freq_qos_update_request(&req_policy->qos_req,
+							      cpu_freq_audio[0]);
+			if (!ret)
+				USB_BOOST_NOTICE("%s: fail to update freq constraint (policy:%d)\n",
+					__func__, req_policy->policy->cpu);
+
+			if (req_policy->policy->cpu == 6 && cpu_freq_audio[1] > 0)
+				ret = freq_qos_update_request(&req_policy->qos_req,
+							      cpu_freq_audio[1]);
+			if (!ret)
+				USB_BOOST_NOTICE("%s: fail to update freq constraint (policy:%d)\n",
+					__func__, req_policy->policy->cpu);
+		}
+	}
+
 	return 0;
 }
 
@@ -286,7 +323,9 @@ int audio_core_hold(void)
 	 *"Power ON CPU -> CPU context restore"
 	 */
 	if (of_device_is_compatible(np, "mediatek,mt6983-usb_boost") ||
-		of_device_is_compatible(np, "mediatek,mt6895-usb_boost")) {
+		of_device_is_compatible(np, "mediatek,mt6895-usb_boost") ||
+		of_device_is_compatible(np, "mediatek,mt6855-usb_boost") ||
+		of_device_is_compatible(np, "mediatek,mt6789-usb_boost")) {
 		USB_BOOST_NOTICE("\n");
 		cpu_latency_qos_update_request(&pm_qos_req, 50);
 	}
@@ -300,7 +339,9 @@ int audio_core_release(void)
 
 	/*Enable MCDI*/
 	if (of_device_is_compatible(np, "mediatek,mt6983-usb_boost") ||
-		of_device_is_compatible(np, "mediatek,mt6895-usb_boost")) {
+		of_device_is_compatible(np, "mediatek,mt6895-usb_boost") ||
+		of_device_is_compatible(np, "mediatek,mt6855-usb_boost") ||
+		of_device_is_compatible(np, "mediatek,mt6789-usb_boost")) {
 		USB_BOOST_NOTICE("\n");
 		cpu_latency_qos_update_request(&pm_qos_req,
 			PM_QOS_DEFAULT_VALUE);
@@ -308,4 +349,3 @@ int audio_core_release(void)
 
 	return 0;
 }
-

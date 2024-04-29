@@ -368,10 +368,10 @@ enum isp_tile_message tile_aal_for(struct tile_func_block *ptr_func,
 enum isp_tile_message tile_prz_for(struct tile_func_block *ptr_func,
 				   struct tile_reg_map *ptr_tile_reg_map)
 {
-	s32 C42OutXLeft;
-	s32 C42OutXRight;
-	s32 C24InXLeft;
-	s32 C24InXRight;
+	s32 C42OutXLeft = 0;
+	s32 C42OutXRight = 0;
+	s32 C24InXLeft = 0;
+	s32 C24InXRight = 0;
 	struct rsz_tile_data *data = &ptr_func->data->rsz;
 
 	if (unlikely(!data))
@@ -567,7 +567,7 @@ static enum isp_tile_message tile_wrot_align_out_width(
 	int full_size_x_out)
 {
 	s32 alignment = 1;
-	s32 remain;
+	s32 remain = 0;
 
 	if (MML_FMT_COMPRESS(data->dest_fmt))
 		alignment = 32;
@@ -609,7 +609,7 @@ enum isp_tile_message tile_wrot_for(struct tile_func_block *ptr_func,
 				    struct tile_reg_map *ptr_tile_reg_map)
 {
 	struct wrot_tile_data *data = &ptr_func->data->wrot;
-	s32 remain;
+	s32 remain = 0;
 
 	if (unlikely(!data))
 		return MDP_MESSAGE_NULL_DATA;
@@ -687,7 +687,7 @@ enum isp_tile_message tile_rdma_back(struct tile_func_block *ptr_func,
 				     struct tile_reg_map *ptr_tile_reg_map)
 {
 	struct rdma_tile_data *data = &ptr_func->data->rdma;
-	s32 remain, start;
+	s32 remain = 0, start = 0;
 
 	if (unlikely(!data))
 		return MDP_MESSAGE_NULL_DATA;
@@ -825,10 +825,10 @@ enum isp_tile_message tile_rdma_back(struct tile_func_block *ptr_func,
 enum isp_tile_message tile_prz_back(struct tile_func_block *ptr_func,
 				    struct tile_reg_map *ptr_tile_reg_map)
 {
-	s32 C24InXLeft;
-	s32 C24InXRight;
-	s32 C42OutXLeft;
-	s32 C42OutXRight;
+	s32 C24InXLeft = 0;
+	s32 C24InXRight = 0;
+	s32 C42OutXLeft = 0;
+	s32 C42OutXRight = 0;
 	struct rsz_tile_data *data = &ptr_func->data->rsz;
 
 	if (unlikely(!data))
@@ -1037,7 +1037,8 @@ enum isp_tile_message tile_wrot_back(struct tile_func_block *ptr_func,
 			full_size_x_out = data->crop.left + data->crop.width;
 
 			if (ptr_func->out_pos_xe + 1 >= full_size_x_out) {
-				ptr_func->in_pos_xe = full_size_x_out - 1;
+				ptr_func->out_pos_xe = full_size_x_out - 1;
+				ptr_func->in_pos_xe = ptr_func->out_pos_xe;
 				/* ptr_func->h_end_flag = true; */
 			}
 		}
@@ -1046,11 +1047,9 @@ enum isp_tile_message tile_wrot_back(struct tile_func_block *ptr_func,
 			if (ptr_func->out_pos_xe + 1 < full_size_x_out &&
 			    ptr_func->out_pos_xe + 9 + 1 > full_size_x_out &&
 			    ptr_func->out_pos_xe != ptr_func->out_pos_xs) {
-				ptr_func->out_pos_xe = full_size_x_out - 9 - 1;
-				ptr_func->in_pos_xe  = full_size_x_out - 9 - 1;
-
-				ptr_func->out_pos_xe = ((ptr_func->out_pos_xe + 1) >> 2 << 2) - 1;
-				ptr_func->in_pos_xe  = ((ptr_func->in_pos_xe + 1) >> 2 << 2) - 1;
+				ptr_func->out_pos_xe =
+					((full_size_x_out - 9 - 1 + 1) >> 2 << 2) - 1;
+				ptr_func->in_pos_xe = ptr_func->out_pos_xe;
 			}
 		}
 
@@ -1076,7 +1075,8 @@ enum isp_tile_message tile_wrot_back(struct tile_func_block *ptr_func,
 			full_size_y_out = data->crop.top + data->crop.height;
 
 			if (ptr_func->out_pos_ye + 1 >= full_size_y_out) {
-				ptr_func->in_pos_ye = full_size_y_out - 1;
+				ptr_func->out_pos_ye = full_size_y_out - 1;
+				ptr_func->in_pos_ye = ptr_func->out_pos_ye;
 				/* ptr_func->v_end_flag = true; */
 			}
 		}
@@ -1133,7 +1133,8 @@ enum isp_tile_message tile_dlo_back(struct tile_func_block *ptr_func,
 			full_size_x_out = data->crop.left + data->crop.width;
 
 			if (ptr_func->out_pos_xe + 1 >= full_size_x_out) {
-				ptr_func->in_pos_xe = full_size_x_out - 1;
+				ptr_func->out_pos_xe = full_size_x_out - 1;
+				ptr_func->in_pos_xe = ptr_func->out_pos_xe;
 				/* ptr_func->h_end_flag = true; */
 			}
 		}

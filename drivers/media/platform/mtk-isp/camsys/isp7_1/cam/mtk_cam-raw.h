@@ -153,6 +153,9 @@ enum {
 
 #define MTK_RAW_TOTAL_NODES (MTK_RAW_PIPELINE_PADS_NUM - MTK_RAW_SINK_NUM)
 
+#define MTK_RAW_CTRL_VALUE	0x0F
+#define MTK_RAW_CTRL_UPDATE	0x10
+
 struct mtk_cam_dev;
 struct mtk_cam_ctx;
 
@@ -184,7 +187,7 @@ struct mtk_cam_ctx;
  */
 
 struct mtk_raw_pde_config {
-	struct mtk_cam_pde_info pde_info;
+	struct mtk_cam_pde_info pde_info[CAM_CTRL_NUM];
 };
 
 struct mtk_cam_resource_config {
@@ -276,6 +279,8 @@ struct mtk_raw_pipeline {
 	struct mtk_raw_pde_config pde_config;
 	s64 hw_mode;
 	s64 hw_mode_pending;
+	/* Frame sync */
+	int fs_config;
 };
 
 struct mtk_raw_device {
@@ -304,7 +309,9 @@ struct mtk_raw_device {
 	u64 sof_count;
 	u64 vsync_count;
 	u64 last_sof_time_ns;
-
+	/* preisp used - for sync.*/
+	int tg_count;
+	int vf_reset_cnt;
 	/* for subsample, sensor-control */
 	bool sub_sensor_ctrl_en;
 	int set_sensor_idx;
@@ -324,6 +331,7 @@ struct mtk_raw_device {
 struct mtk_yuv_device {
 	struct device *dev;
 	unsigned int id;
+	int irq;
 	void __iomem *base;
 	void __iomem *base_inner;
 	unsigned int num_clks;
@@ -389,6 +397,8 @@ void dbload_force(struct mtk_raw_device *dev);
 void toggle_db(struct mtk_raw_device *dev);
 
 void enable_tg_db(struct mtk_raw_device *dev, int en);
+void mtk_cam_raw_vf_reset(struct mtk_cam_ctx *ctx,
+	struct mtk_raw_device *dev);
 
 void initialize(struct mtk_raw_device *dev, int is_slave);
 
@@ -456,7 +466,7 @@ mtk_cam_res_copy_fmt_to_user(struct mtk_raw_pipeline *pipeline,
 
 bool mtk_raw_resource_calc(struct mtk_cam_device *cam,
 			   struct mtk_cam_resource_config *res,
-			   s64 pixel_rate, int res_plan,
+			   s64 pixel_rate, int res_plan, int fps,
 			   int in_w, int in_h, int *out_w, int *out_h);
 
 #ifdef CAMSYS_TF_DUMP_71_1

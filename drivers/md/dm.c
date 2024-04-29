@@ -608,18 +608,19 @@ static void start_io_acct(struct dm_io *io)
 				    false, 0, &io->stats_aux);
 }
 
-static void end_io_acct(struct dm_io *io)
+static void end_io_acct(struct mapped_device *md, struct bio *bio,
+			unsigned long start_time, struct dm_stats_aux *stats_aux)
 {
-	struct mapped_device *md = io->md;
-	struct bio *bio = io->orig_bio;
-	unsigned long duration = jiffies - io->start_time;
-
-	bio_end_io_acct(bio, io->start_time);
+	unsigned long duration = jiffies - start_time;
 
 	if (unlikely(dm_stats_used(&md->stats)))
 		dm_stats_account_io(&md->stats, bio_data_dir(bio),
 				    bio->bi_iter.bi_sector, bio_sectors(bio),
-				    true, duration, &io->stats_aux);
+				    true, duration, stats_aux);
+
+	smp_wmb();
+
+	bio_end_io_acct(bio, start_time);
 
 	/* nudge anyone waiting on suspend queue */
 	if (unlikely(wq_has_sleeper(&md->wait)))
@@ -904,6 +905,8 @@ static void dec_pending(struct dm_io *io, blk_status_t error)
 	blk_status_t io_error;
 	struct bio *bio;
 	struct mapped_device *md = io->md;
+	unsigned long start_time = 0;
+	struct dm_stats_aux stats_aux;
 
 	/* Push-back supersedes any I/O errors */
 	if (unlikely(error)) {
@@ -930,8 +933,10 @@ static void dec_pending(struct dm_io *io, blk_status_t error)
 
 		io_error = io->status;
 		bio = io->orig_bio;
-		end_io_acct(io);
+		start_time = io->start_time;
+		stats_aux = io->stats_aux;
 		free_io(md, io);
+		end_io_acct(md, bio, start_time, &stats_aux);
 
 		if (io_error == BLK_STS_DM_REQUEUE)
 			return;
@@ -969,6 +974,24 @@ void disable_write_same(struct mapped_device *md)
 	limits->max_write_same_sectors = 0;
 }
 
+#ifdef CONFIG_DEVICE_XCOPY
+/* work for debug */
+void disable_device_copy(struct mapped_device *md)
+{
+	struct queue_limits *limits = dm_get_queue_limits(md);
+	struct para_limit *para = (struct para_limit *) limits->android_kabi_reserved1;
+
+	/* device doesn't really support device copy, disable it */
+	if (para) {
+		para->max_copy_blks = 0;
+		para->min_copy_blks = 0;
+		para->max_copy_entr = 0;
+	} else
+		DMWARN("%s limits not alloc.", __func__);
+	DMWARN("XCOPY parameters error, so set to zero.");
+}
+#endif
+
 void disable_write_zeroes(struct mapped_device *md)
 {
 	struct queue_limits *limits = dm_get_queue_limits(md);
@@ -990,6 +1013,10 @@ static void clone_endio(struct bio *bio)
 	struct mapped_device *md = tio->io->md;
 	dm_endio_fn endio = tio->ti->type->end_io;
 	struct bio *orig_bio = io->orig_bio;
+#ifdef CONFIG_DEVICE_XCOPY
+	struct para_limit *limit =
+		(struct para_limit *)bio->bi_disk->queue->limits.android_kabi_reserved1;
+#endif
 
 	if (unlikely(error == BLK_STS_TARGET)) {
 		if (bio_op(bio) == REQ_OP_DISCARD &&
@@ -1001,6 +1028,12 @@ static void clone_endio(struct bio *bio)
 		else if (bio_op(bio) == REQ_OP_WRITE_ZEROES &&
 			 !bio->bi_disk->queue->limits.max_write_zeroes_sectors)
 			disable_write_zeroes(md);
+#ifdef CONFIG_DEVICE_XCOPY
+		else if (bio_op(bio) == REQ_OP_DEVICE_COPY &&
+			 limit && !limit->max_copy_blks &&
+			 !limit->min_copy_blks && !limit->max_copy_entr)
+			disable_device_copy(md);
+#endif
 	}
 
 	/*
@@ -1576,6 +1609,11 @@ static bool __process_abnormal_io(struct clone_info *ci, struct dm_target *ti,
 	case REQ_OP_WRITE_ZEROES:
 		num_bios = ti->num_write_zeroes_bios;
 		break;
+#ifdef CONFIG_DEVICE_XCOPY
+	case REQ_OP_DEVICE_COPY:
+		num_bios = 1;
+		break;
+#endif
 	default:
 		return false;
 	}
@@ -1618,6 +1656,10 @@ static void init_clone_info(struct clone_info *ci, struct mapped_device *md,
 	ci->map = map;
 	ci->io = alloc_io(md, bio);
 	ci->sector = bio->bi_iter.bi_sector;
+#ifdef CONFIG_DEVICE_XCOPY
+	if (op_is_copy(bio->bi_opf))
+		ci->sector = 0;
+#endif
 }
 
 #define __dm_part_stat_sub(part, field, subnd)	\
@@ -1693,15 +1735,10 @@ static blk_qc_t dm_submit_bio(struct bio *bio)
 	struct dm_table *map;
 
 	map = dm_get_live_table(md, &srcu_idx);
-	if (unlikely(!map)) {
-		DMERR_LIMIT("%s: mapping table unavailable, erroring io",
-			    dm_device_name(md));
-		bio_io_error(bio);
-		goto out;
-	}
 
-	/* If suspended, queue this IO for later */
-	if (unlikely(test_bit(DMF_BLOCK_IO_FOR_SUSPEND, &md->flags))) {
+	/* If suspended, or map not yet available, queue this IO for later */
+	if (unlikely(test_bit(DMF_BLOCK_IO_FOR_SUSPEND, &md->flags)) ||
+	    unlikely(!map)) {
 		if (bio->bi_opf & REQ_NOWAIT)
 			bio_wouldblock_error(bio);
 		else if (bio->bi_opf & REQ_RAHEAD)
@@ -1910,8 +1947,10 @@ static struct mapped_device *alloc_dev(int minor)
 	if (IS_ENABLED(CONFIG_DAX_DRIVER)) {
 		md->dax_dev = alloc_dax(md, md->disk->disk_name,
 					&dm_dax_ops, 0);
-		if (IS_ERR(md->dax_dev))
+		if (IS_ERR(md->dax_dev)) {
+			md->dax_dev = NULL;
 			goto bad;
+		}
 	}
 
 	add_disk_no_queue_reg(md->disk);
@@ -2363,6 +2402,8 @@ static int dm_wait_for_bios_completion(struct mapped_device *md, long task_state
 		io_schedule();
 	}
 	finish_wait(&md->wait, &wait);
+
+	smp_rmb();
 
 	return r;
 }
@@ -3006,6 +3047,11 @@ static int dm_call_pr(struct block_device *bdev, iterate_devices_callout_fn fn,
 	if (dm_table_get_num_targets(table) != 1)
 		goto out;
 	ti = dm_table_get_target(table, 0);
+
+	if (dm_suspended_md(md)) {
+		ret = -EAGAIN;
+		goto out;
+	}
 
 	ret = -EINVAL;
 	if (!ti->type->iterate_devices)

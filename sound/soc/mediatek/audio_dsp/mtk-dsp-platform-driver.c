@@ -26,7 +26,10 @@ static DEFINE_MUTEX(adsp_wakelock_lock);
 
 #define IPIMSG_SHARE_MEM (1024)
 #define DSP_IRQ_LOOP_COUNT (3)
-static int adsp_wakelock_count;
+//#ifdef OPLUS_ARCH_EXTENDS
+/* 2023/01/17, add patch for ALPS07829227 */
+static int adsp_wakelock_count = 0;
+//#endif
 static struct wakeup_source *adsp_audio_wakelock;
 static int ktv_status;
 
@@ -46,6 +49,7 @@ static int dsp_task_attr_set(struct snd_kcontrol *kcontrol,
 	int id;
 	int dsp_task_id = -1;
 	int attr_id = -1;
+	const char *name = NULL;
 
 	/* get task attribute id */
 	if (strstr(kcontrol->id.name, "ref_runtime"))
@@ -62,7 +66,11 @@ static int dsp_task_attr_set(struct snd_kcontrol *kcontrol,
 
 	/* get dsp task id */
 	for (id = 0; id < AUDIO_TASK_DAI_NUM; id++) {
-		if (strstr(kcontrol->id.name, get_str_by_dsp_dai_id(id))) {
+		name = get_str_by_dsp_dai_id(id);
+		if (!name)
+			continue;
+
+		if (strstr(kcontrol->id.name, name)) {
 			dsp_task_id = id;
 			break;
 		}
@@ -85,6 +93,7 @@ static int dsp_task_attr_get(struct snd_kcontrol *kcontrol,
 	int id;
 	int dsp_task_id = -1;
 	int attr_id;
+	const char *name = NULL;
 
 	/* get task attribute id */
 	if (strstr(kcontrol->id.name, "ref_runtime"))
@@ -101,7 +110,11 @@ static int dsp_task_attr_get(struct snd_kcontrol *kcontrol,
 
 	/* get dsp task id */
 	for (id = 0; id < AUDIO_TASK_DAI_NUM; id++) {
-		if (strstr(kcontrol->id.name, get_str_by_dsp_dai_id(id))) {
+		name = get_str_by_dsp_dai_id(id);
+		if (!name)
+			continue;
+
+		if (strstr(kcontrol->id.name, name)) {
 			dsp_task_id = id;
 			break;
 		}
@@ -113,8 +126,7 @@ static int dsp_task_attr_get(struct snd_kcontrol *kcontrol,
 		return -1;
 	}
 
-	ucontrol->value.integer.value[0] =
-		get_task_attr(dsp_task_id, attr_id);
+	ucontrol->value.integer.value[0] = get_task_attr(dsp_task_id, attr_id);
 
 	return 0;
 }
@@ -148,6 +160,29 @@ static int dsp_wakelock_get(struct snd_kcontrol *kcontrol,
 	ucontrol->value.integer.value[0] = adsp_wakelock_count;
 	return 0;
 }
+
+//#ifdef OPLUS_ARCH_EXTENDS
+/* 2023/01/17, add patch for ALPS07829227 */
+static int reset_dsp_wakelock_set(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	mutex_lock(&adsp_wakelock_lock);
+	pr_info("%s reset wakelock for audiohal reboot %d", __func__, adsp_wakelock_count);
+	if (adsp_wakelock_count > 0)
+	{
+		aud_wake_unlock(adsp_audio_wakelock);
+		adsp_wakelock_count = 0;
+	}
+	mutex_unlock(&adsp_wakelock_lock);
+	return 0;
+}
+
+static int reset_dsp_wakelock_get(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	return 0;
+}
+//#endif
 
 static int audio_dsp_version_set(struct snd_kcontrol *kcontrol,
 				 struct snd_ctl_elem_value *ucontrol)
@@ -288,6 +323,11 @@ static const struct snd_kcontrol_new dsp_platform_kcontrols[] = {
 		       ktv_status_get, ktv_status_set),
 	SOC_SINGLE_EXT("audio_dsp_wakelock", SND_SOC_NOPM, 0, 0x1, 0,
 		       dsp_wakelock_get, dsp_wakelock_set),
+//#ifdef OPLUS_ARCH_EXTENDS
+/* 2023/01/17, add patch for ALPS07829227 */
+	SOC_SINGLE_EXT("reset_audio_dsp_wakelock", SND_SOC_NOPM, 0, 0x1, 0,
+		       reset_dsp_wakelock_get, reset_dsp_wakelock_set),
+//#endif
 };
 
 static snd_pcm_uframes_t mtk_dsphw_pcm_pointer_ul
@@ -505,6 +545,9 @@ static bool mtk_dsp_check_exception(struct mtk_base_dsp *dsp,
 {
 	const char *task_name = get_str_by_dsp_dai_id(id);
 
+	if (id < 0 || id >= AUDIO_TASK_DAI_NUM)
+		return false;
+
 	if (!dsp->dsp_mem[id].substream) {
 		pr_info_ratelimited("%s() %s substream NULL\n",
 				    __func__, task_name);
@@ -530,7 +573,6 @@ static bool mtk_dsp_check_exception(struct mtk_base_dsp *dsp,
 	if (ipi_msg && ipi_msg->param2 == ADSP_DL_CONSUME_UNDERFLOW) {
 		pr_info("%s() %s adsp underflow\n", __func__, task_name);
 		dsp->dsp_mem[id].underflowed = true;
-
 		snd_pcm_period_elapsed(dsp->dsp_mem[id].substream);
 
 		return true;
@@ -709,36 +751,39 @@ static int mtk_dsp_pcm_open(struct snd_soc_component *component,
 		struct snd_pcm_substream *substream)
 {
 	int ret = 0;
+	int retry_flag = false;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct mtk_base_dsp *dsp = snd_soc_component_get_drvdata(component);
 	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
 
 	int id = cpu_dai->id;
-
 	int dsp_feature_id = get_featureid_by_dsp_daiid(id);
 	const char *task_name = get_str_by_dsp_dai_id(id);
-
-	pr_info("%s(), %s\n", __func__, task_name);
 
 	memcpy((void *)(&(runtime->hw)), (void *)dsp->mtk_dsp_hardware,
 	       sizeof(struct snd_pcm_hardware));
 
-
 	ret = mtk_dsp_register_feature(dsp_feature_id);
 	if (ret) {
-		pr_info("%s register feature fail", __func__);
+		pr_info("%s(), %s register feature fail", __func__, task_name);
 		return -1;
 	}
 
+RETRY:
 	/* send to task with open information */
 	ret = mtk_scp_ipi_send(get_dspscene_by_dspdaiid(id), AUDIO_IPI_MSG_ONLY,
 			       AUDIO_IPI_MSG_NEED_ACK, AUDIO_DSP_TASK_OPEN,
 			       0, 0, NULL);
 	if (ret < 0) {
-		pr_info("%s() ret[%d]\n", __func__, ret);
-		mtk_dsp_deregister_feature(dsp_feature_id);
-		goto error;
+		if (!retry_flag) {
+			wait_dsp_ready();
+			retry_flag = true;
+			goto RETRY;
+		} else {
+			mtk_dsp_deregister_feature(dsp_feature_id);
+			goto END;
+		}
 	}
 
 	/* set the wait_for_avail to 2 sec*/
@@ -747,7 +792,9 @@ static int mtk_dsp_pcm_open(struct snd_soc_component *component,
 	dsp->dsp_mem[id].substream = substream;
 	dsp->dsp_mem[id].underflowed = 0;
 
-error:
+END:
+	pr_info("%s(), %s(%d) ret[%d] retry[%d]\n", __func__,
+		task_name, id, ret, retry_flag);
 	return ret;
 }
 
@@ -778,6 +825,36 @@ static int mtk_dsp_pcm_close(struct snd_soc_component *component,
 	return ret;
 }
 
+/*
+ * allocate dsp copy
+ * @param: @action true: allocate buffer false: free buffer
+ */
+
+static int mtk_dsp_manage_copybuf(bool action,
+				  struct mtk_base_dsp_mem *dsp_mep,
+				  unsigned int size)
+{
+	if (dsp_mep == NULL)
+		return -ENOMEM;
+
+	if (action == true) {
+		if (size == 0)
+			return -EINVAL;
+		if (dsp_mep->dsp_copy_buf != NULL)
+			return -EINVAL;
+		dsp_mep->dsp_copy_buf = vmalloc(size);
+		if (!dsp_mep->dsp_copy_buf)
+			return -ENOMEM;
+	} else {
+		if (dsp_mep->dsp_copy_buf == NULL)
+			return -EINVAL;
+		vfree(dsp_mep->dsp_copy_buf);
+		dsp_mep->dsp_copy_buf = NULL;
+	}
+	return 0;
+}
+
+
 static int mtk_dsp_pcm_hw_params(struct snd_soc_component *component,
 		struct snd_pcm_substream *substream,
 		struct snd_pcm_hw_params *params)
@@ -786,90 +863,76 @@ static int mtk_dsp_pcm_hw_params(struct snd_soc_component *component,
 	struct mtk_base_dsp *dsp = snd_soc_component_get_drvdata(component);
 	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
 	int id = cpu_dai->id;
-	void *ipi_audio_buf; /* dsp <-> audio data struct*/
+	struct mtk_base_dsp_mem *dsp_mem = &dsp->dsp_mem[id];
 	int ret = 0;
 
-	pr_info("%s(), task_id: %d\n", __func__, id);
+	pr_info("%s(), %s task_id: %d\n", __func__, cpu_dai->name, id);
 
-	reset_audiobuffer_hw(&dsp->dsp_mem[id].adsp_buf);
-	reset_audiobuffer_hw(&dsp->dsp_mem[id].audio_afepcm_buf);
-	reset_audiobuffer_hw(&dsp->dsp_mem[id].adsp_work_buf);
-	RingBuf_Reset(&dsp->dsp_mem[id].ring_buf);
+	reset_audiobuffer_hw(&dsp_mem->adsp_buf);
+	reset_audiobuffer_hw(&dsp_mem->audio_afepcm_buf);
+	reset_audiobuffer_hw(&dsp_mem->adsp_work_buf);
+	RingBuf_Reset(&dsp_mem->ring_buf);
 
 	dsp->request_dram_resource(dsp->dev);
 
 	/* gen pool related */
-	dsp->dsp_mem[id].gen_pool_buffer =
-		mtk_get_adsp_dram_gen_pool(AUDIO_DSP_AFE_SHARE_MEM_ID);
-	if (dsp->dsp_mem[id].gen_pool_buffer != NULL) {
-		/* if already allocate , free it.*/
-		if (substream->dma_buffer.area) {
-			ret = mtk_adsp_genpool_free_sharemem_ring
-						(&dsp->dsp_mem[id], id);
-			if (!ret)
-				release_snd_dmabuffer(&substream->dma_buffer);
-		}
-		if (ret < 0) {
-			pr_warn("%s err\n", __func__);
-			return -1;
-		}
+	dsp_mem->gen_pool_buffer = mtk_get_adsp_dram_gen_pool(AUDIO_DSP_AFE_SHARE_MEM_ID);
+	if (!dsp_mem->gen_pool_buffer)
+		goto error;
 
-		/* allocate ring buffer wioth share memory */
-		ret = mtk_adsp_genpool_allocate_sharemem_ring(
-			&dsp->dsp_mem[id], params_buffer_bytes(params), id);
+	/* if already allocate , free it.*/
+	if (substream->dma_buffer.area) {
+		mtk_adsp_genpool_free_sharemem_ring(dsp_mem, id);
+		release_snd_dmabuffer(&substream->dma_buffer);
+	}
 
-		if (ret < 0) {
-			pr_warn("%s err\n", __func__);
-			return -1;
-		}
+	/* allocate ring buffer with share memory */
+	ret = mtk_adsp_genpool_allocate_sharemem_ring(dsp_mem, params_buffer_bytes(params), id);
+	if (ret < 0) {
+		pr_warn("%s err\n", __func__);
+		return ret;
+	}
 
+	/* allocate copy buffer */
+	ret = mtk_dsp_manage_copybuf(true, &dsp->dsp_mem[id], params_buffer_bytes(params));
+	if (ret) {
+		pr_info("%s ret = %d\n", __func__, ret);
+		return -1;
 	}
 
 #ifdef DEBUG_VERBOSE
-	dump_audio_dsp_dram(&dsp->dsp_mem[id].msg_atod_share_buf);
-	dump_audio_dsp_dram(&dsp->dsp_mem[id].msg_dtoa_share_buf);
-	dump_audio_dsp_dram(&dsp->dsp_mem[id].dsp_ring_share_buf);
+
+	dump_audio_dsp_dram(&dsp_mem->msg_atod_share_buf);
+	dump_audio_dsp_dram(&dsp_mem->msg_dtoa_share_buf);
+	dump_audio_dsp_dram(&dsp_mem->dsp_ring_share_buf);
+	dump_rbuf_s(__func__, &dsp_mem->ring_buf);
 #endif
-	ret = dsp_dram_to_snd_dmabuffer(&dsp->dsp_mem[id].dsp_ring_share_buf,
-					&substream->dma_buffer);
+	ret = dsp_dram_to_snd_dmabuffer(&dsp_mem->dsp_ring_share_buf, &substream->dma_buffer);
 	if (ret < 0)
 		goto error;
-	ret = set_audiobuffer_hw(&dsp->dsp_mem[id].adsp_buf,
-				 BUFFER_TYPE_SHARE_MEM);
+	ret = set_audiobuffer_hw(&dsp_mem->adsp_buf, BUFFER_TYPE_SHARE_MEM);
 	if (ret < 0)
 		goto error;
-	ret = set_audiobuffer_memorytype(&dsp->dsp_mem[id].adsp_buf,
-					 MEMORY_AUDIO_DRAM);
+	ret = set_audiobuffer_memorytype(&dsp_mem->adsp_buf, MEMORY_AUDIO_DRAM);
 	if (ret < 0)
 		goto error;
-	ret = set_audiobuffer_attribute(&dsp->dsp_mem[id].adsp_buf,
-					substream,
-					params,
-					afe_get_pcmdir(substream->stream,
-					dsp->dsp_mem[id].adsp_buf));
+	ret = set_audiobuffer_attribute(&dsp_mem->adsp_buf, substream, params,
+					afe_get_pcmdir(substream->stream, dsp_mem->adsp_buf));
 	if (ret < 0)
 		goto error;
 
-	memcpy(&dsp->dsp_mem[id].adsp_work_buf, &dsp->dsp_mem[id].adsp_buf,
-	       sizeof(struct audio_hw_buffer));
-	/* send audio_hw_buffer to SCP side */
-	ipi_audio_buf = (void *)dsp->dsp_mem[id].msg_atod_share_buf.va_addr;
-	memcpy((void *)ipi_audio_buf, (void *)&dsp->dsp_mem[id].adsp_buf,
-	       sizeof(struct audio_hw_buffer));
-
-#ifdef DEBUG_VERBOSE
-	dump_rbuf_s(__func__, &dsp->dsp_mem[id].ring_buf);
-#endif
+	memcpy(&dsp_mem->adsp_work_buf, &dsp_mem->adsp_buf, sizeof(struct audio_hw_buffer));
 
 	/* send to task with hw_param information , buffer and pcm attribute */
+	memcpy(dsp_mem->msg_atod_share_buf.vir_addr,
+	       &dsp_mem->adsp_buf, sizeof(struct audio_hw_buffer));
+
 	mtk_scp_ipi_send(get_dspscene_by_dspdaiid(id), AUDIO_IPI_PAYLOAD,
 			 AUDIO_IPI_MSG_NEED_ACK, AUDIO_DSP_TASK_HWPARAM,
-			 sizeof(dsp->dsp_mem[id].msg_atod_share_buf.phy_addr),
+			 sizeof(dsp_mem->msg_atod_share_buf.phy_addr),
 			 0,
-			 (char *)&dsp->dsp_mem[id].msg_atod_share_buf.phy_addr);
-
+			 (char *)&dsp_mem->msg_atod_share_buf.phy_addr);
 	return ret;
-
 error:
 	pr_err("%s err\n", __func__);
 	return -1;
@@ -883,32 +946,28 @@ static int mtk_dsp_pcm_hw_free(struct snd_soc_component *component,
 	struct mtk_base_dsp *dsp = snd_soc_component_get_drvdata(component);
 	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
 	int id = cpu_dai->id;
-	struct gen_pool *gen_pool_dsp;
-
-
-	gen_pool_dsp = mtk_get_adsp_dram_gen_pool(AUDIO_DSP_AFE_SHARE_MEM_ID);
+	struct mtk_base_dsp_mem *dsp_mem = &dsp->dsp_mem[id];
 
 	/* send to task with free status */
 	ret = mtk_scp_ipi_send(get_dspscene_by_dspdaiid(id), AUDIO_IPI_MSG_ONLY,
-			 AUDIO_IPI_MSG_NEED_ACK, AUDIO_DSP_TASK_HWFREE, 1, 0,
-			 NULL);
-
+			       AUDIO_IPI_MSG_NEED_ACK, AUDIO_DSP_TASK_HWFREE, 1, 0, NULL);
 	if (ret)
 		pr_info("%s ret[%d]\n", __func__, ret);
 
-	if (gen_pool_dsp != NULL && substream->dma_buffer.area) {
-		ret = mtk_adsp_genpool_free_sharemem_ring
-				(&dsp->dsp_mem[id], id);
-		if (!ret)
-			release_snd_dmabuffer(&substream->dma_buffer);
-	}
+	mtk_adsp_genpool_free_sharemem_ring(dsp_mem, id);
+	release_snd_dmabuffer(&substream->dma_buffer);
+
+	/* free copy buffer */
+	ret = mtk_dsp_manage_copybuf(false, &dsp->dsp_mem[id], 0);
+	if (ret)
+		pr_info("%s ret = %d\n", __func__, ret);
 
 	/* release dsp memory */
-	ret = reset_audiobuffer_hw(&dsp->dsp_mem[id].adsp_buf);
+	reset_audiobuffer_hw(&dsp_mem->adsp_buf);
 
 	dsp->release_dram_resource(dsp->dev);
 
-	return ret;
+	return 0;
 }
 
 static int mtk_dsp_pcm_hw_prepare(struct snd_soc_component *component,
@@ -919,8 +978,8 @@ static int mtk_dsp_pcm_hw_prepare(struct snd_soc_component *component,
 	struct mtk_base_dsp *dsp = snd_soc_component_get_drvdata(component);
 	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
 	int id = cpu_dai->id;
-	void *ipi_audio_buf; /* dsp <-> audio data struct */
-	struct audio_hw_buffer *adsp_buf = &dsp->dsp_mem[id].adsp_buf;
+	struct mtk_base_dsp_mem *dsp_mem = &dsp->dsp_mem[id];
+	struct audio_hw_buffer *adsp_buf = &dsp_mem->adsp_buf;
 	const char *task_name = get_str_by_dsp_dai_id(id);
 
 	/* The data type of stop_threshold in userspace is unsigned int.
@@ -931,10 +990,9 @@ static int mtk_dsp_pcm_hw_prepare(struct snd_soc_component *component,
 		substream->runtime->stop_threshold = ULONG_MAX;
 
 	clear_audiobuffer_hw(adsp_buf);
-	RingBuf_Reset(&dsp->dsp_mem[id].ring_buf);
+	RingBuf_Reset(&dsp_mem->ring_buf);
 	RingBuf_Bridge_Reset(&adsp_buf->aud_buffer.buf_bridge);
-	RingBuf_Bridge_Reset(
-		&dsp->dsp_mem[id].adsp_work_buf.aud_buffer.buf_bridge);
+	RingBuf_Bridge_Reset(&dsp_mem->adsp_work_buf.aud_buffer.buf_bridge);
 
 	ret = set_audiobuffer_threshold(adsp_buf, substream);
 	if (ret < 0)
@@ -948,16 +1006,14 @@ static int mtk_dsp_pcm_hw_prepare(struct snd_soc_component *component,
 		adsp_buf->aud_buffer.period_count);
 
 	/* send audio_hw_buffer to SCP side */
-	ipi_audio_buf = (void *)dsp->dsp_mem[id].msg_atod_share_buf.va_addr;
-	memcpy((void *)ipi_audio_buf, (void *)adsp_buf,
-	       sizeof(struct audio_hw_buffer));
+	memcpy(dsp_mem->msg_atod_share_buf.vir_addr, adsp_buf, sizeof(struct audio_hw_buffer));
 
 	/* send to task with prepare status */
 	mtk_scp_ipi_send(get_dspscene_by_dspdaiid(id), AUDIO_IPI_PAYLOAD,
 			 AUDIO_IPI_MSG_NEED_ACK, AUDIO_DSP_TASK_PREPARE,
-			 sizeof(dsp->dsp_mem[id].msg_atod_share_buf.phy_addr),
+			 sizeof(dsp_mem->msg_atod_share_buf.phy_addr),
 			 0,
-			 (char *)&dsp->dsp_mem[id].msg_atod_share_buf.phy_addr);
+			 (char *)&dsp_mem->msg_atod_share_buf.phy_addr);
 	return ret;
 }
 
@@ -1023,8 +1079,7 @@ static int mtk_dsp_pcm_copy_dl(struct snd_pcm_substream *substream,
 			       struct mtk_base_dsp_mem *dsp_mem,
 			       void __user *buf)
 {
-	int ret = 0, availsize = 0;
-	int ack_type;
+	int ret = 0, availsize = 0, ack_type;
 	void *ipi_audio_buf; /* dsp <-> audio data struct */
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
@@ -1033,6 +1088,7 @@ static int mtk_dsp_pcm_copy_dl(struct snd_pcm_substream *substream,
 	struct ringbuf_bridge *buf_bridge =
 		&(dsp_mem->adsp_buf.aud_buffer.buf_bridge);
 	unsigned long flags = 0;
+    void *dsp_copy_buf = dsp_mem->dsp_copy_buf;
 	spinlock_t *ringbuf_lock = &dsp_mem->ringbuf_lock;
 	const char *task_name = get_str_by_dsp_dai_id(id);
 
@@ -1049,24 +1105,31 @@ static int mtk_dsp_pcm_copy_dl(struct snd_pcm_substream *substream,
 		return -1;
 	}
 
+	if (dsp_copy_buf == NULL)
+		return -ENOMEM;
+
 	Ringbuf_Check(ringbuf);
 	Ringbuf_Bridge_Check(
 		&dsp_mem->adsp_buf.aud_buffer.buf_bridge);
 
+	/* copy user space memory */
+	copy_from_user(dsp_copy_buf, buf, copy_size);
+
 	spin_lock_irqsave(ringbuf_lock, flags);
 	availsize = RingBuf_getFreeSpace(ringbuf);
-	spin_unlock_irqrestore(ringbuf_lock, flags);
 	if (availsize < copy_size) {
 		pr_info("%s, id = %d, fail copy_size = %d availsize = %d\n",
 			__func__, id, copy_size, RingBuf_getFreeSpace(ringbuf));
 		dump_rbuf_s("check dlcopy", &dsp_mem->ring_buf);
 		dump_rbuf_bridge_s("check dlcopy",
 			   &dsp_mem->adsp_buf.aud_buffer.buf_bridge);
+		spin_unlock_irqrestore(ringbuf_lock, flags);
 		return -1;
 	}
 
-	RingBuf_copyFromUserLinear(ringbuf, buf, copy_size);
+	RingBuf_copyFromLinear(ringbuf, dsp_copy_buf, copy_size);
 	RingBuf_Bridge_update_writeptr(buf_bridge, copy_size);
+	spin_unlock_irqrestore(ringbuf_lock, flags);
 
 	/* send audio_hw_buffer to SCP side*/
 	ipi_audio_buf = (void *)dsp_mem->msg_atod_share_buf.va_addr;
@@ -1162,9 +1225,8 @@ static int mtk_dsp_pcm_copy(struct snd_soc_component *component,
 	struct mtk_base_dsp_mem *dsp_mem = &dsp->dsp_mem[id];
 	int ret = 0;
 
-	if (bytes <= 0) {
-		pr_info(
-			"error %s channel = %d pos = %lu count = %lu bytes = %d\n",
+	if (bytes == 0) {
+		pr_info("error %s channel = %d pos = %lu count = %lu bytes = %lu\n",
 			__func__, channel, pos, bytes, bytes);
 		return -1;
 	}
@@ -1224,15 +1286,16 @@ static void audio_dsp_tasklet(struct mtk_base_dsp *dsp, unsigned int core_id)
 			pr_info("-%s flag[%llx] task_id[%d] task_value[%lu]\n",
 				__func__, *pdtoa, task_id, task_value);
 #endif
-			if (task_id >= 0 && !dsp->dsp_mem[task_id].underflowed)
-				mtk_dsp_dl_consume_handler(dsp, NULL, task_id);
+			if (task_id >= 0 && task_id < AUDIO_TASK_DAI_NUM) {
+				if (!dsp->dsp_mem[task_id].underflowed)
+					mtk_dsp_dl_consume_handler(dsp, NULL, task_id);
+			}
 		}
 		loop_count--;
 	} while (*pdtoa && task_value && loop_count > 0);
-#ifdef DEBUG_VERBOSE_IRQ
-	pr_info("leave %s\n", __func__);
-#endif
+
 	release_adsp_semaphore(SEMA_AUDIO);
+
 	return;
 
 }
@@ -1259,7 +1322,7 @@ void audio_irq_handler(int irq, void *data, int core_id)
 		pr_info("%s dsp[%p]\n", __func__, dsp);
 		goto IRQ_ERROR;
 	}
-	if (core_id >= get_adsp_core_total()) {
+	if (core_id >= get_adsp_core_total() || core_id < 0) {
 		pr_info("%s core_id[%d]\n", __func__, core_id);
 		goto IRQ_ERROR;
 	}
@@ -1270,7 +1333,7 @@ void audio_irq_handler(int irq, void *data, int core_id)
 		goto IRQ_ERROR;
 	}
 
-	tasklet_schedule(&dsp->dsp_tasklet[core_id]);
+	audio_dsp_tasklet(dsp, core_id);
 	return;
 IRQ_ERROR:
 	pr_info("IRQ_ERROR irq[%d] data[%p] core_id[%d] dsp[%p]\n",
@@ -1361,6 +1424,7 @@ static int mtk_dsp_probe(struct snd_soc_component *component)
 #ifdef CFG_RECOVERY_SUPPORT
 	adsp_register_notify(&adsp_audio_notifier);
 #endif
+
 	return ret;
 }
 

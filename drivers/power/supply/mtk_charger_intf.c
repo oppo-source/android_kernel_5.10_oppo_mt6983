@@ -178,7 +178,11 @@ int get_battery_current(struct mtk_charger *info)
 
 static int get_pmic_vbus(struct mtk_charger *info, int *vchr)
 {
+#ifdef OPLUS_FEATURE_CHG_BASIC
+	union power_supply_propval prop = { 0 };
+#else
 	union power_supply_propval prop;
+#endif
 	static struct power_supply *chg_psy;
 	int ret;
 
@@ -304,7 +308,9 @@ bool is_charger_exist(struct mtk_charger *info)
 
 int get_charger_type(struct mtk_charger *info)
 {
-	union power_supply_propval prop, prop2, prop3;
+	union power_supply_propval prop = {0};
+	union power_supply_propval prop2 = {0};
+	union power_supply_propval prop3 = {0};
 	static struct power_supply *chg_psy;
 	int ret;
 
@@ -344,7 +350,8 @@ int get_charger_type(struct mtk_charger *info)
 
 int get_usb_type(struct mtk_charger *info)
 {
-	union power_supply_propval prop, prop2;
+	union power_supply_propval prop = {0};
+	union power_supply_propval prop2 = {0};
 	static struct power_supply *chg_psy;
 	int ret;
 

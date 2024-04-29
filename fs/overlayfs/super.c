@@ -144,11 +144,16 @@ static int ovl_dentry_revalidate_common(struct dentry *dentry,
 					unsigned int flags, bool weak)
 {
 	struct ovl_entry *oe = dentry->d_fsdata;
+	struct inode *inode = d_inode_rcu(dentry);
 	struct dentry *upper;
 	unsigned int i;
 	int ret = 1;
 
-	upper = ovl_dentry_upper(dentry);
+	/* Careful in RCU mode */
+	if (!inode)
+		return -ECHILD;
+
+	upper = ovl_i_dentry_upper(inode);
 	if (upper)
 		ret = ovl_revalidate_real(upper, flags, weak);
 
@@ -765,10 +770,14 @@ retry:
 			goto retry;
 		}
 
-		work = ovl_create_real(dir, work, OVL_CATTR(attr.ia_mode));
-		err = PTR_ERR(work);
-		if (IS_ERR(work))
-			goto out_err;
+		err = ovl_mkdir_real(dir, &work, attr.ia_mode);
+		if (err)
+			goto out_dput;
+
+		/* Weird filesystem returning with hashed negative (kernfs)? */
+		err = -EINVAL;
+		if (d_really_is_negative(work))
+			goto out_dput;
 
 		/*
 		 * Try to remove POSIX ACL xattrs from workdir.  We are good if:

@@ -924,10 +924,16 @@ int jbd2_fc_wait_bufs(journal_t *journal, int num_blks)
 	for (i = j_fc_off - 1; i >= j_fc_off - num_blks; i--) {
 		bh = journal->j_fc_wbuf[i];
 		wait_on_buffer(bh);
+		/*
+		 * Update j_fc_off so jbd2_fc_release_bufs can release remain
+		 * buffer head.
+		 */
+		if (unlikely(!buffer_uptodate(bh))) {
+			journal->j_fc_off = i + 1;
+			return -EIO;
+		}
 		put_bh(bh);
 		journal->j_fc_wbuf[i] = NULL;
-		if (unlikely(!buffer_uptodate(bh)))
-			return -EIO;
 	}
 
 	return 0;
@@ -2795,6 +2801,7 @@ struct journal_head *jbd2_journal_grab_journal_head(struct buffer_head *bh)
 	jbd_unlock_bh_journal_head(bh);
 	return jh;
 }
+EXPORT_SYMBOL(jbd2_journal_grab_journal_head);
 
 static void __journal_remove_journal_head(struct buffer_head *bh)
 {
@@ -2847,6 +2854,7 @@ void jbd2_journal_put_journal_head(struct journal_head *jh)
 		jbd_unlock_bh_journal_head(bh);
 	}
 }
+EXPORT_SYMBOL(jbd2_journal_put_journal_head);
 
 /*
  * Initialize jbd inode head
