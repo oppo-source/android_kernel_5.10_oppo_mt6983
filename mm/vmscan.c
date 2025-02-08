@@ -4574,6 +4574,8 @@ static int kswapd(void *p)
 	struct task_struct *tsk = current;
 	const struct cpumask *cpumask = cpumask_of_node(pgdat->node_id);
 
+	set_user_nice(tsk, -20);
+
 	if (!cpumask_empty(cpumask))
 		set_cpus_allowed_ptr(tsk, cpumask);
 
