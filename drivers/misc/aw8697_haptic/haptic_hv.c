@@ -5630,6 +5630,14 @@ static void rtp_work_routine(struct work_struct *work)
 	aw_haptic->func->set_rtp_aei(aw_haptic, false);
 	aw_haptic->func->irq_clear(aw_haptic);
 	aw_haptic->func->play_stop(aw_haptic);
+
+	if (aw_haptic->rtp_file_num == AW_WAVEFORM_INDEX_ZERO) {
+		aw_haptic->rtp_init = false;
+		op_clean_status(aw_haptic);
+		aw_dev_info("%s: vibrator stopped \n", __func__);
+		mutex_unlock(&aw_haptic->lock);
+		return;
+	}
 	/* gain */
 	ram_vbat_comp(aw_haptic, false);
 	/* boost voltage */
@@ -8395,6 +8403,7 @@ static void rtp_work_proc(struct work_struct *work)
 				aw_haptic->func->set_rtp_aei(aw_haptic, false);
 				aw_haptic->haptic_rtp_mode = false;
 				aw_dev_err("%s: failed to enter RTP_GO status!\n", __func__);
+				mutex_unlock(&aw_haptic->lock);
 				return;
 			}
 			mutex_unlock(&aw_haptic->lock);

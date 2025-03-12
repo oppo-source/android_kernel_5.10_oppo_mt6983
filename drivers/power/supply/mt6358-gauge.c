@@ -997,6 +997,7 @@ int nafg_check_corner(struct mtk_gauge *gauge)
 	get_c_dltv_mv = reg_to_mv_value(nag_c_dltv_reg_value);
 
 	nag_vbat = get_nafg_vbat(gauge);
+#ifndef OPLUS_FEATURE_CHG_BASIC
 	if (nag_vbat < 31500 && nag_zcv > 31500)
 		gauge->nafg_corner = 1;
 	else if (nag_zcv < 31500 && nag_vbat > 31500)
@@ -1008,6 +1009,12 @@ int nafg_check_corner(struct mtk_gauge *gauge)
 		__func__, gauge->nafg_corner, nag_vbat, nag_zcv, get_c_dltv_mv,
 		setto_cdltv_thr_mv, diff,
 		nag_c_dltv_value_h, nag_c_dltv_value);
+#else
+	bm_debug("%s:nag_vbat:%d nag_zcv:%d get_c_dltv_mv:%d setto_cdltv_thr_mv:%d, diff:%d, RG[0x%x,0x%x]\n",
+		__func__, nag_vbat, nag_zcv, get_c_dltv_mv,
+		setto_cdltv_thr_mv, diff,
+		nag_c_dltv_value_h, nag_c_dltv_value);
+#endif
 
 	return 0;
 }
@@ -2467,16 +2474,24 @@ static int nafg_dltv_get(struct mtk_gauge *gauge,
 {
 	signed int nag_dltv_reg_value;
 	signed int nag_dltv_mv_value;
+#ifndef OPLUS_FEATURE_CHG_BASIC
 	short reg_value;
+#else
+	s16 reg_value;
+#endif
 
 	regmap_read(gauge->regmap,
 		RG_AUXADC_NAG_6, &nag_dltv_reg_value);
 
 	reg_value = nag_dltv_reg_value & AUXADC_NAG_DLTV_MASK;
 
+#ifndef OPLUS_FEATURE_CHG_BASIC
 	nag_dltv_mv_value = reg_to_mv_value(nag_dltv_reg_value);
-	*nag_dltv = nag_dltv_mv_value;
+#else
+	nag_dltv_mv_value = reg_to_mv_value(reg_value);
+#endif
 
+	*nag_dltv = nag_dltv_mv_value;
 	bm_debug("[fg_bat_nafg][%s] mV:Reg [%d:%d] [%d:%d]\n",
 		__func__, nag_dltv_mv_value, nag_dltv_reg_value,
 		reg_to_mv_value(reg_value), reg_value);
@@ -2500,7 +2515,7 @@ static int nafg_c_dltv_get(struct mtk_gauge *gauge,
 			AUXADC_NAG_C_DLTV_26_16_MASK);
 
 	bcheckbit10 = nag_c_dltv_value_h & 0x0400;
-
+#ifndef OPLUS_FEATURE_CHG_BASIC
 	if (gauge->nafg_corner == 1) {
 		nag_c_dltv_reg_value = (nag_c_dltv_value & 0x7fff);
 		nag_c_dltv_mv_value = reg_to_mv_value(nag_c_dltv_reg_value);
@@ -2523,7 +2538,7 @@ static int nafg_c_dltv_get(struct mtk_gauge *gauge,
 			gauge->nafg_corner);
 		return 0;
 	}
-
+#endif
 	if (bcheckbit10 == 0)
 		nag_c_dltv_reg_value = (nag_c_dltv_value & 0xffff) +
 				((nag_c_dltv_value_h & 0x07ff) << 16);
@@ -2533,10 +2548,15 @@ static int nafg_c_dltv_get(struct mtk_gauge *gauge,
 
 	nag_c_dltv_mv_value = reg_to_mv_value(nag_c_dltv_reg_value);
 	*nafg_c_dltv = nag_c_dltv_mv_value;
-
+#ifndef OPLUS_FEATURE_CHG_BASIC
 	bm_debug("[fg_bat_nafg][%s] mV:Reg[%d:%d] [b10:%d][26_16(0x%04x) 15_00(0x%04x)] corner:%d\n",
 		__func__, nag_c_dltv_mv_value, nag_c_dltv_reg_value,
 		bcheckbit10, nag_c_dltv_value_h, nag_c_dltv_value, gauge->nafg_corner);
+#else
+	bm_debug("[fg_bat_nafg][%s] mV:Reg[%d:%d] [b10:%d][26_16(0x%04x) 15_00(0x%04x)]\n",
+		__func__, nag_c_dltv_mv_value, nag_c_dltv_reg_value,
+		bcheckbit10, nag_c_dltv_value_h, nag_c_dltv_value);
+#endif
 
 	return 0;
 }

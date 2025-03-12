@@ -263,12 +263,12 @@
 	qcom,ffc_normal_vfloat_sw_limit = <4545>;
 	qcom,ffc_temp_normal_vfloat_mv = <4630>;
 	qcom,ffc_normal_vfloat_over_sw_limit = <4630>;
-	qcom,ffc_warm_vfloat_sw_limit = <4545>;
+	qcom,ffc_warm_vfloat_sw_limit = <4525>;
 
 	qcom,ffc2_normal_vfloat_sw_limit = <4545>;
 	qcom,ffc2_temp_normal_vfloat_mv = <4630>;
 	qcom,ffc2_normal_vfloat_over_sw_limit = <4630>;
-	qcom,ffc2_warm_vfloat_sw_limit = <4545>;
+	qcom,ffc2_warm_vfloat_sw_limit = <4500>;
 	full-pre-ffc-mv = <4485>;
 	full_pre_ffc_judge;
 

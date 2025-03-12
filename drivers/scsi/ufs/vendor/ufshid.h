@@ -48,7 +48,7 @@
 #include "../../../block/blk.h"
 
 #define UFSHID_VER					0x0303
-#define UFSHID_DD_VER					0x030202
+#define UFSHID_DD_VER					0x030203
 #define UFSHID_DD_VER_POST				""
 
 #define UFS_FEATURE_SUPPORT_HID_BIT			0x400
@@ -72,6 +72,7 @@
 #define HID_SIZE_DEFAULT			((30 * 1024 * 1024 * 1024ULL) / HID_SIZE_UNIT)
 #define HID_SIZE_UNIT				4096
 #define KB_PER_HID_SIZE_UNIT			(HID_SIZE_UNIT / 1024)
+
 #define HID_L2P_DEFRAG_THRESHOLD_DEFAULT	0x0
 #define HID_L2P_MAX_THRESHOLD			0xA
 

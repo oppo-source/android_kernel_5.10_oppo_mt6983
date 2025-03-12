@@ -26,8 +26,13 @@
 	FUELGAGUE_APPLY = <(1)>;
 	IS_SUBBOARD_TEMP_SUPPORT = <(0)>;
 	Enable_Is_Force_Full = <(1)>;
+	RBAT_PULL_DOWN_R = <(24000)>;
+	RBAT_PULL_UP_R = <(12000)>;
+	USE_MORE_PRECISE_NTC_TABLE = <(1)>;
 	R_FG_VALUE = <(1)>;
-	CAR_TUNE_VALUE = <(106)>;
+	CAR_TUNE_VALUE = <(109)>;
+	AGING_FACTOR_MIN = <(93)>;
+	AGING_FACTOR_DIFF = <(1)>;
 	#include "mediatek/bat_setting/mt6895_23081_battery_table_ext.dtsi"
 	#include "mediatek/bat_setting/mt6895_23081_battery_prop_dim2_ext.dtsi"
 };
@@ -442,6 +447,7 @@
 &lk_charger {
 	en_vol_ctrl_vibrate = <3200>;
 	support_tuv_authentication;
+	support_hot_enter_kpoc;
 	charger_no_wiress;
 	support_battery_type = <2>;
 	support_maxim_battery_authentication;
@@ -452,6 +458,7 @@
 	oplus,batt_info = /bits/ 8 <0x36 0x31 0x31 0x33 0x30 0x33 0x30 0x30 0x30 0x30 0x36 0x35>;
 
 	sub_board_temp_support;
+	over_high_temp_thr = <60>;
 	sub_board_adc_channel = <18>;		/* AUXADC_CHAN_VIN1 in LK, Use the MT6368 PMIC */
 	sub_board_adc_pmic = <1>;		/* Vivien use the MT6368 Pmic, in lk2 it's name is "second_pmic_sdmadc" */
 	sub_board_adc_pull_up_voltage = <1840>;
@@ -504,9 +511,11 @@
 		oplus,support_usbtemp_protect_v2;
 		oplus_spec,usbtemp_batt_temp_low = <50>;
 		oplus_spec,usbtemp_batt_temp_high = <50>;
+		oplus_spec,usbtemp_batt_temp_over_hot = <60>;
 		oplus_spec,usbtemp_ntc_temp_low = <57>;
 		oplus_spec,usbtemp_ntc_temp_high = <69>;
 		oplus_spec,usbtemp_temp_gap_low_with_batt_temp = <7>;
+		oplus_spec,usbtemp_temp_gap_with_batt_temp_in_over_hot = <15>;
 		oplus_spec,usbtemp_temp_gap_high_with_batt_temp = <12>;
 		oplus_spec,usbtemp_temp_gap_low_without_batt_temp = <12>;
 		oplus_spec,usbtemp_temp_gap_high_without_batt_temp = <24>;
@@ -669,7 +678,9 @@
 		oplus_spec,vbat_charging_uv_thr_mv = <3200>;
 
 		/*If use subboard NTC as battery temp, config it as 20, otherwise 0 */
-		oplus_spec,tbatt_power_off_cali_temp = <20>;
+		oplus_spec,tbatt_power_off_cali_temp = <0>;
+		oplus_spec,poweroff_high_batt_temp = <720>;
+		oplus_spec,poweroff_emergency_batt_temp = <770>;
 		oplus,vooc_show_ui_soc_decimal;
 		oplus,ui_soc_decimal_speedmin = <20>;
 		oplus,gauge_stuck_jump_support;
@@ -736,6 +747,10 @@
 		oplus,ic_index = <0>;
 
 		oplus,use_audio_switch;
+	};
+	oplus_smart_charge: oplus,smart_charge {
+		compatible = "oplus,smart_charge";
+		oplus,quick_mode_gain_support;
 	};
 };
 
@@ -806,6 +821,7 @@
 
 		oplus,target_vbus_mv = <11000>;
 		oplus,curr_max_ma = <3000>;
+		oplus,high_imp_compensation_setting_mv = <100>;
 
 		oplus,curr_table_type = <UFCS_CURR_CP_TABLE>;
 

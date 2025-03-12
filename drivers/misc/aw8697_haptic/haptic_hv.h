@@ -227,6 +227,7 @@ struct mmap_buf_format {
 #define AW_WAVEFORM_INDEX_HIGH_TEMP		(51)
 #define AW_WAVEFORM_INDEX_OLD_STEADY		(52)
 #define AW_WAVEFORM_INDEX_LISTEN_POP		(53)
+#define AW_WAVEFORM_INDEX_ZERO			(0)
 
 enum aw_haptic_custom_level {
 	HAPTIC_CUSTOM_LEVEL_WEAK = 0,	/* 3V */

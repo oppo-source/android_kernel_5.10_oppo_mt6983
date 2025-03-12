@@ -39,6 +39,8 @@
 #include "../../../mm/chp_ext.h"
 #endif
 
+#include "mm_osvelte/mm-trace.h"
+
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL)
 #include "mm_boost_pool/oplus_boost_pool_mtk.h"
 #include "mm_boost_pool/trace_dma_buf.h"
@@ -807,10 +809,10 @@ static struct dma_buf *system_heap_do_allocate(struct dma_heap *heap,
 	if (!buffer)
 		return ERR_PTR(-ENOMEM);
 
-#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL)
-	trace_dma_buf_alloc_start(len, uncached);
-#endif /*CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL */
-
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+	mm_trace_fmt_begin("%s %zu,%lu,%lu", dma_heap_get_name(heap),
+		           sizeof(*buffer), atomic64_read(&dma_heap_normal_total), len);
+#endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
 	INIT_LIST_HEAD(&buffer->attachments);
 	mutex_init(&buffer->lock);
 	buffer->heap = heap;
@@ -897,9 +899,9 @@ static struct dma_buf *system_heap_do_allocate(struct dma_heap *heap,
 		dma_unmap_sgtable(dma_heap_get_dev(heap), table, DMA_BIDIRECTIONAL, 0);
 	}
 
-#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL)
-	trace_dma_buf_alloc_end(len, uncached);
-#endif /*CONFIG_OPLUS_FEATURE_MM_BOOSTPOOL */
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+	mm_trace_fmt_end();
+#endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
 	atomic64_add(dmabuf->size, &dma_heap_normal_total);
 
 	return dmabuf;
@@ -924,6 +926,11 @@ free_buffer:
 #endif
 	}
 	kfree(buffer);
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+	mm_trace_fmt_end();
+#endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
+
 	return ERR_PTR(ret);
 }
 

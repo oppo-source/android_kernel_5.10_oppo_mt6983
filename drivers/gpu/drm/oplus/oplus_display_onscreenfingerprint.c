@@ -48,6 +48,9 @@
 #define OPLUS_OFP_GET_VIDEO_MODE_AOD_FOD_CONFIG(fp_type)	((fp_type) & OPLUS_OFP_FP_TYPE_VIDEO_MODE_AOD_FOD)
 /* notifier event */
 #define DRM_PANEL_EVENT_HBM_STATE 1
+#define VSYNC_PERIOD_120HZ 8333
+#define VSYNC_PERIOD_90HZ  11111
+#define VSYNC_PERIOD_60HZ  16666
 
 /* -------------------- parameters -------------------- */
 /* log level config */
@@ -59,6 +62,7 @@ static struct oplus_ofp_params g_oplus_ofp_params = {0};
 /* -------------------- extern -------------------- */
 /* extern params */
 extern unsigned int oplus_display_brightness;
+extern struct oplus_demura_setting_table demura_setting;
 /* extern functions */
 extern void lcdinfo_notify(unsigned long val, void *v);
 
@@ -232,6 +236,45 @@ int oplus_ofp_set_hbm_state(bool hbm_state)
 	return 0;
 }
 
+static int oplus_ofp_set_panel_hbm_witch_demura(struct mtk_drm_crtc *mtk_crtc, struct cmdq_pkt *cmdq_handle, bool hbm_en)
+{
+	unsigned int level = 0;
+	int bl_demura_mode = OPLUS_DEMURA_DBV_MODE_MAX;
+	struct mtk_ddp_comp *comp = mtk_ddp_comp_request_output(mtk_crtc);
+
+	if (!(comp && comp->funcs && comp->funcs->io_cmd)) {
+		OFP_ERR("Invalid params\n");
+		return -EINVAL;
+	}
+	if (cmdq_handle == NULL) {
+		cmdq_handle = cmdq_pkt_create(mtk_crtc->gce_obj.client[CLIENT_CFG]);
+	}
+	mtk_drm_trace_begin("DSI_SET_DEMURA_BL");
+
+	if (hbm_en)
+		level = 0xF01;
+	else
+		level = oplus_display_brightness;
+
+	if ((level > 1) && (level < demura_setting.demura_switch_dvb1)) {
+		bl_demura_mode = OPLUS_DEMURA_DBV_MODE0;
+	} else if ((level >= demura_setting.demura_switch_dvb1) && (level < demura_setting.demura_switch_dvb2)) {
+		bl_demura_mode = OPLUS_DEMURA_DBV_MODE1;
+	} else if ((level >= demura_setting.demura_switch_dvb2) && (level < demura_setting.demura_switch_dvb3)) {
+		bl_demura_mode = OPLUS_DEMURA_DBV_MODE2;
+	} else if ((level >= demura_setting.demura_switch_dvb3) && (level < demura_setting.demura_switch_dvb4)) {
+		bl_demura_mode = OPLUS_DEMURA_DBV_MODE3;
+	} else if (level >= demura_setting.demura_switch_dvb4) {
+		bl_demura_mode = OPLUS_DEMURA_DBV_MODE4;
+	}
+
+	comp->funcs->io_cmd(comp, cmdq_handle, DSI_SET_DEMURA_BL, &bl_demura_mode);
+	OFP_DEBUG("bl_demura_mode =%d\n", bl_demura_mode);
+	mtk_drm_trace_end();
+
+	return 0;
+}
+
 /* update doze_active and hbm_enable property value */
 int oplus_ofp_property_update(int prop_id, unsigned int prop_val)
 {
@@ -281,7 +324,7 @@ int oplus_ofp_send_hbm_state_event(unsigned int hbm_state)
 }
 
 /* wait te and delay while using cmdq */
-static int oplus_ofp_cmdq_pkt_wait(struct mtk_drm_crtc *mtk_crtc, struct cmdq_pkt *cmdq_handle, int te_count, int delay_us)
+static int oplus_ofp_cmdq_pkt_wait(struct mtk_drm_crtc *mtk_crtc, struct cmdq_pkt *cmdq_handle, int te_count, int delay_us, bool hbm_en, bool before_hbm)
 {
 	int wait_te_count = te_count;
 	struct drm_crtc *crtc;
@@ -328,6 +371,9 @@ static int oplus_ofp_cmdq_pkt_wait(struct mtk_drm_crtc *mtk_crtc, struct cmdq_pk
 					cmdq_pkt_wfe(cmdq_handle, mtk_crtc->gce_obj.event[EVENT_TE]);
 				}
 				OFP_DEBUG("complete the EVENT_TE waiting\n");
+				if (demura_setting.oplus_bl_demura_dbv_support && before_hbm && wait_te_count == 1) {
+					oplus_ofp_set_panel_hbm_witch_demura(mtk_crtc, cmdq_handle, hbm_en);
+				}
 				wait_te_count--;
 			}
 		}
@@ -450,7 +496,11 @@ static int oplus_ofp_hbm_wait_handle(struct drm_crtc *crtc, struct cmdq_pkt *cmd
 			}
 		} else {
 			if (panel_ext->oplus_ofp_pre_hbm_off_delay) {
-				te_count = 0;
+				if(panel_ext->oplus_te_count) {
+					te_count = panel_ext->oplus_te_count;
+				} else {
+					te_count = 0;
+				}
 				/* the delay time bfore hbm off */
 				delay_us = panel_ext->oplus_ofp_pre_hbm_off_delay * 1000;
 
@@ -492,7 +542,7 @@ static int oplus_ofp_hbm_wait_handle(struct drm_crtc *crtc, struct cmdq_pkt *cmd
 			usleep_range(delay_us * 2, delay_us * 2 + 500);
 		}
 	}
-	ret = oplus_ofp_cmdq_pkt_wait(mtk_crtc, cmdq_handle, te_count, delay_us);
+	ret = oplus_ofp_cmdq_pkt_wait(mtk_crtc, cmdq_handle, te_count, delay_us, hbm_en, before_hbm);
 	if (ret) {
 		OFP_ERR("oplus_ofp_cmdq_pkt_wait failed\n");
 	}
@@ -779,10 +829,17 @@ int oplus_ofp_notify_uiready(void *mtk_drm_crtc)
 }
 
 /* need filter backlight in hbm state and aod unlocking process */
+unsigned int hbm_force_off_when_backlight_0 = 0;
+EXPORT_SYMBOL(hbm_force_off_when_backlight_0);
 bool oplus_ofp_backlight_filter(int bl_level)
 {
 	bool need_filter_backlight = false;
 	struct oplus_ofp_params *p_oplus_ofp_params = oplus_ofp_get_params();
+	struct drm_crtc *crtc;
+	struct drm_device *ddev = get_drm_device();
+	int refresh_rate = 0;
+	struct mtk_drm_crtc *mtk_crtc = NULL;
+	int delay = 0;
 
 	OFP_DEBUG("start\n");
 
@@ -791,16 +848,52 @@ bool oplus_ofp_backlight_filter(int bl_level)
 		return -EINVAL;
 	}
 
+	/* this debug cmd only for crtc0 */
+	crtc = list_first_entry(&(ddev)->mode_config.crtc_list,
+				typeof(*crtc), head);
+	if (!crtc) {
+		OFP_ERR("find crtc fail\n");
+		return -EINVAL;
+	}
+
+	mtk_crtc = to_mtk_crtc(crtc);
+	if (!mtk_crtc || !mtk_crtc->panel_ext || !mtk_crtc->panel_ext->params) {
+		OFP_ERR("falied to get lcd proc info\n");
+		return -EINVAL;
+	}
+
+	refresh_rate = mtk_crtc->panel_ext->params->dyn_fps.vact_timing_fps;
+	if (refresh_rate == 120)
+		delay = VSYNC_PERIOD_120HZ * 2;
+	else if (refresh_rate == 90)
+		delay = VSYNC_PERIOD_90HZ * 2;
+	else if (refresh_rate == 60)
+		delay = VSYNC_PERIOD_60HZ * 2;
+
 	mtk_drm_trace_begin("oplus_ofp_backlight_filter");
 
 	if (oplus_ofp_get_hbm_state()) {
 		if (bl_level == 0) {
-			oplus_ofp_set_hbm_state(false);
-			OFP_DEBUG("backlight is 0, set hbm state to false\n");
-			if (p_oplus_ofp_params->aod_unlocking == true) {
-				p_oplus_ofp_params->aod_unlocking = false;
-				OFP_INFO("oplus_ofp_aod_unlocking: %d\n", p_oplus_ofp_params->aod_unlocking);
-				mtk_drm_trace_c("%d|oplus_ofp_aod_unlocking|%d", g_commit_pid, p_oplus_ofp_params->aod_unlocking);
+			if (!strcmp(mtk_crtc->panel_ext->params->vendor, "22823_Tianma_NT37705")) {
+				OFP_INFO("backlight is 0, set hbm state to false,and flush hbm off cmd,delay %d us\n", delay);
+				if (p_oplus_ofp_params->aod_unlocking == true) {
+					p_oplus_ofp_params->aod_unlocking = false;
+					OFP_INFO("oplus_ofp_aod_unlocking: %d\n", p_oplus_ofp_params->aod_unlocking);
+					mtk_drm_trace_c("%d|oplus_ofp_aod_unlocking|%d", g_commit_pid, p_oplus_ofp_params->aod_unlocking);
+				}
+				hbm_force_off_when_backlight_0 = 1;
+				oplus_ofp_set_panel_hbm(crtc, false);
+				hbm_force_off_when_backlight_0 = 0;
+				oplus_ofp_set_hbm_state(false);
+				usleep_range(delay, delay+100);
+			} else {
+				oplus_ofp_set_hbm_state(false);
+				OFP_DEBUG("backlight is 0, set hbm state to false\n");
+				if (p_oplus_ofp_params->aod_unlocking == true) {
+					p_oplus_ofp_params->aod_unlocking = false;
+					OFP_INFO("oplus_ofp_aod_unlocking: %d\n", p_oplus_ofp_params->aod_unlocking);
+					mtk_drm_trace_c("%d|oplus_ofp_aod_unlocking|%d", g_commit_pid, p_oplus_ofp_params->aod_unlocking);
+				}
 			}
 			need_filter_backlight = false;
 		} else {

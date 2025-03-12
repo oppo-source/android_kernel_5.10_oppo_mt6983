@@ -462,6 +462,7 @@ struct mtk_panel_params {
 	unsigned int before_hbm_en_time;
 	unsigned int before_hbm_en_delay_time;
 	unsigned int before_hbm_dis_time;
+	unsigned int oplus_te_count;
 	/* #ifdef OPLUS_ADFR */
 	unsigned int oplus_mode_switch_hs;
 	unsigned int oplus_fakeframe_cfg;

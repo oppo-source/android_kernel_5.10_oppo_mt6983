@@ -350,6 +350,7 @@ static struct mtk_panel_params ext_params[MODE_NUM] = {
 		.clk_trail = 10,
 	},
 	.change_fps_by_vfp_send_cmd_need_delay = 1,
+	.skip_unnecessary_switch = true,
 	.cust_esd_check = 1,
 	.esd_check_enable = 1,
 	.esd_te_check_gpio = 1,
@@ -450,6 +451,7 @@ static struct mtk_panel_params ext_params[MODE_NUM] = {
 		.clk_trail = 10,
 	},
 	.change_fps_by_vfp_send_cmd_need_delay = 1,
+	.skip_unnecessary_switch = true,
 	.cust_esd_check = 1,
 	.esd_check_enable = 1,
 	.esd_te_check_gpio = 1,
@@ -616,11 +618,11 @@ static int lcm_setbacklight_cmdq(void *dsi, dcs_write_gce cb, void *handle,
 		return -EINVAL;
 	}
 
-	if (last_backlight == 0 || level == 0) {
-		DISP_INFO("[INFO][%s:%d]backlight lvl:%u\n", __func__, __LINE__, level);
+	if (level == 0) {
+		DISP_INFO("[INFO][%s:%d]backlight lvl:%u, flag_hbm = %d\n", __func__, __LINE__, level, flag_hbm);
 		cb(dsi, handle, bl_tb1, ARRAY_SIZE(bl_tb1));
 	} else {
-		DISP_INFO("[INFO][%s:%d]backlight lvl:%u\n", __func__, __LINE__, level);
+		DISP_INFO("[INFO][%s:%d]backlight lvl:%u, flag_hbm = %d\n", __func__, __LINE__, level, flag_hbm);
 	}
 
 	last_backlight = level;

@@ -315,6 +315,7 @@ struct ufs_mtk_host {
 #if defined(CONFIG_UFSFEATURE)
 	struct ufsf_feature ufsf;
 #endif
+	struct delayed_work iostack_work;
 };
 /*feature-flashaging806-v001-2-begin*/
 struct unipro_signal_quality_ctrl {

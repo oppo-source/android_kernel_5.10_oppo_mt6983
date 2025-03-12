@@ -371,6 +371,7 @@
 		status = "okay";
 		compatible = "sc,sc8547-master";
 		reg = <0x6F 0>;
+                ovp_reg = <0x36>; /* vbat_ovp:4.85V */
 
 		qcom,irq_gpio = <&pio 10 0x00>;
 		interrupt-parent = <&pio>;
@@ -614,6 +615,7 @@
 		status = "okay";
 		compatible = "sc,sc8547-slave";
 		reg = <0x6F 0>;
+                ovp_reg = <0x36>; /* vbat_ovp:4.85V */
 	};
 };
 

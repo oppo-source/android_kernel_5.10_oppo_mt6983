@@ -723,6 +723,7 @@ static struct mtk_panel_params ext_params_60Hz = {
 	.oplus_ofp_hbm_on_delay = 0,
 	.oplus_ofp_pre_hbm_off_delay = 2,
 	.oplus_ofp_hbm_off_delay = 0,
+	.oplus_te_count = 1,
 	.oplus_ofp_need_to_sync_data_in_aod_unlocking = true,
 	.oplus_ofp_aod_off_insert_black = 1,
 	.oplus_ofp_aod_off_black_frame_total_time = 42,
@@ -839,6 +840,7 @@ static struct mtk_panel_params ext_params_90Hz = {
     .oplus_ofp_hbm_on_delay = 0,
     .oplus_ofp_pre_hbm_off_delay = 2,
     .oplus_ofp_hbm_off_delay = 0,
+    .oplus_te_count = 1,
     .oplus_ofp_need_to_sync_data_in_aod_unlocking = true,
     .oplus_ofp_aod_off_insert_black = 1,
     .oplus_ofp_aod_off_black_frame_total_time = 42,
@@ -955,6 +957,7 @@ static struct mtk_panel_params ext_params_120Hz = {
     .oplus_ofp_hbm_on_delay = 0,
     .oplus_ofp_pre_hbm_off_delay = 2,
     .oplus_ofp_hbm_off_delay = 0,
+    .oplus_te_count = 1,
     .oplus_ofp_need_to_sync_data_in_aod_unlocking = true,
     .oplus_ofp_aod_off_insert_black = 1,
     .oplus_ofp_aod_off_black_frame_total_time = 42,
@@ -1161,9 +1164,6 @@ static int lcm_set_hbm(void *dsi, dcs_write_gce cb, void *handle, unsigned int h
         for (i = 0; i < sizeof(HBM_off_setting)/sizeof(struct LCM_setting_table); i++) {
             cb(dsi, handle, HBM_off_setting[i].para_list, HBM_off_setting[i].count);
         }
-		if (oplus_display_brightness != 1) {
-			pwm_power_on = true;
-		}
 	    DISP_DEBUG("paralist[1]=%x, paralist[2]=%x\n", HBM_off_setting[0].para_list[1], HBM_off_setting[0].para_list[2]);
 	}
 	return 0;
@@ -1191,9 +1191,6 @@ static int panel_hbm_set_cmdq(struct drm_panel *panel, void *dsi, dcs_write_gce 
         for (i = 0; i < sizeof(HBM_off_setting)/sizeof(struct LCM_setting_table); i++) {
             cb(dsi, handle, HBM_off_setting[i].para_list, HBM_off_setting[i].count);
         }
-		if (oplus_display_brightness != 1) {
-			pwm_power_on = true;
-		}
 	    DISP_DEBUG("paralist[1]=%x, paralist[2]=%x\n", HBM_off_setting[0].para_list[1], HBM_off_setting[0].para_list[2]);
 	}
 	return 0;
@@ -1229,7 +1226,6 @@ static int panel_doze_disable(struct drm_panel *panel, void *dsi, dcs_write_gce 
 	}
 
 	lcm_setbacklight_cmdq(dsi, cb, handle, oplus_display_brightness);
-	pwm_power_on = true;
 	DISP_DEBUG("%s:success\n", __func__);
 
 	return 0;
@@ -1238,7 +1234,7 @@ static int panel_doze_disable(struct drm_panel *panel, void *dsi, dcs_write_gce 
 static int panel_doze_enable(struct drm_panel *panel, void *dsi, dcs_write_gce cb, void *handle)
 {
 	unsigned int i = 0;
-    unsigned int cmd;
+	unsigned int cmd;
 
 	for (i = 0; i < (sizeof(AOD_on_setting)/sizeof(struct LCM_setting_table)); i++) {
 		cmd = AOD_on_setting[i].cmd;

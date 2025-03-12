@@ -31,7 +31,7 @@
 	oplus,pps_r_limit = <280 200 140 90 50>;
 	oplus,pps_strategy_batt_high_temp = <385 395 420 375 385 410>;
 	oplus,pps_strategy_high_current = <3000 3000 2000 3000 3000 3000>;
-	oplus,pps_charge_strategy_soc = <0 20 35 55 75 85 95>;
+	oplus,pps_charge_strategy_soc = <0 20 35 55 75 85 90>;
 	oplus,pps_charge_strategy_temp = <0 50 120 160 350 430 510>;
 
 	pps_charge_third_strategy {

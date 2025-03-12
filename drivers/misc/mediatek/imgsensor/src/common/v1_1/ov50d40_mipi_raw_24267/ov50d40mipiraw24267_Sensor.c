@@ -153,7 +153,7 @@ static struct imgsensor_info_struct imgsensor_info = {
         .grabwindow_height = 1080,
         .mipi_data_lp2hs_settle_dc = 85,
         .max_framerate = 600,
-        .mipi_pixel_rate = 760800000,
+        .mipi_pixel_rate = 540000000,
     },
 
     .custom3 = {

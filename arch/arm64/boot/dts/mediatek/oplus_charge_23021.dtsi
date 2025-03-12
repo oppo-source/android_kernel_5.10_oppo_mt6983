@@ -640,6 +640,7 @@
 &lk_charger {
 	en_vol_ctrl_vibrate = <3200>;
 	support_tuv_authentication;
+	support_hot_enter_kpoc;
 	charger_no_wiress;
 	support_battery_type = <2>;
 	support_battery_authentication;
@@ -654,6 +655,7 @@
 	sub_board_adc_pures = <3>;	/* Vivien config as SDMADC_OPEN */
 
 	support_sdp_screenoff;
+	over_high_temp_thr = <60>;
 	led_brightness = <102>;
 	max_charger_voltage = <15000000>;
 	boot_battery_voltage = <3350000>;
@@ -865,6 +867,8 @@
 
 		/*If use subboard NTC as battery temp, config it as 20, otherwise 0 */
 		oplus_spec,tbatt_power_off_cali_temp = <20>;
+		oplus_spec,poweroff_high_batt_temp = <720>;
+		oplus_spec,poweroff_emergency_batt_temp = <770>;
 		oplus,vooc_show_ui_soc_decimal;
 		oplus,ui_soc_decimal_speedmin = <2>;
 		oplus,gauge_stuck_jump_support;
@@ -971,7 +975,7 @@
 		compatible = "oplus,cpa";
 		oplus,protocol_list = <CHG_PROTOCOL_UFCS 33
 				       CHG_PROTOCOL_PD 18
-				       CHG_PROTOCOL_VOOC 80
+				       CHG_PROTOCOL_VOOC 67
 				       CHG_PROTOCOL_QC 18>;
 		oplus,default_protocol_list = <CHG_PROTOCOL_UFCS
 					       CHG_PROTOCOL_PD

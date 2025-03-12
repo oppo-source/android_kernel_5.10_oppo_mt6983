@@ -5871,6 +5871,10 @@ void mtk_cam_extisp_sv_frame_start(struct mtk_cam_ctx *ctx,
 				dev_info(ctx->cam->dev, "[%s] vf_reset_cnt:%d\n",
 					__func__, raw_dev->vf_reset_cnt);
 				raw_dev->vf_reset_cnt--;
+			} else if (ctx->composed_frame_seq_no < stream_data->frame_seq_no) {
+				dev_info(ctx->cam->dev, "[%s:skip] req:%d, wait composed:%d, tg_cnt:%d\n",
+					__func__, stream_data->frame_seq_no, ctx->composed_frame_seq_no,
+					irq_info->tg_cnt);
 			} else {
 				state_sensor = state_temp;
 			}

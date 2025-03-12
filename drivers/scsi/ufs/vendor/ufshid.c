@@ -883,22 +883,36 @@ void ufshid_remove(struct ufsf_feature *ufsf)
 	INFO_MSG("end HID release");
 }
 
+#define SPM_ACTIVE_POWER_LEVEL			1
 void ufshid_suspend(struct ufsf_feature *ufsf, bool is_system_pm)
 {
 	struct ufshid_dev *hid = ufsf->hid_dev;
+	struct ufs_hba *hba = NULL;
 	int ret;
 
 	if (!hid)
 		return;
 
+	if (!hid->hid_trigger)
+		goto out;
+
 	if (is_system_pm) {
-		ret = ufshid_trigger_off(hid);
-		if (unlikely(ret))
-			ERR_MSG("trigger off fail ret (%d)", ret);
-	} else if (unlikely(hid->hid_trigger)) {
-		ERR_MSG("hid_trigger was set to block the suspend. so weird");
+		hba = hid->ufsf->hba;
+		if (hba->spm_lvl <= SPM_ACTIVE_POWER_LEVEL &&
+		    strncmp(hba->sdev_ufs_device->rev, "1800", strlen("1800")) >= 0) {
+			if (ufshid_is_in_progress(hid))
+				HID_DEBUG(hid, "HID is in progress");
+		} else {
+			HID_DEBUG(hid, "SPM Level is not 0 or 1. So HID will be off");
+			ret = ufshid_trigger_off(hid);
+			if (unlikely(ret))
+				ERR_MSG("trigger off fail ret (%d)", ret);
+		}
+	} else {
+		ERR_MSG("hid_trigger was set to block the runtime suspend. so weird");
 	}
 
+out:
 	ufshid_set_state(ufsf, HID_SUSPEND);
 
 	cancel_delayed_work_sync(&hid->hid_trigger_work);
@@ -928,12 +942,14 @@ void ufshid_resume(struct ufsf_feature *ufsf, bool is_link_off)
 	if (!hid)
 		return;
 
-	if (unlikely(hid->hid_trigger))
-		ERR_MSG("hid_trigger need to off");
 	ufshid_set_state(ufsf, HID_PRESENT);
 
 	if (is_link_off && hid->l2p_defrag_sup)
 		ufshid_restore_attr(hid);
+
+	if (hid->hid_trigger)
+		schedule_delayed_work(&hid->hid_trigger_work,
+				      msecs_to_jiffies(hid->hid_trigger_delay));
 }
 
 /* sysfs function */

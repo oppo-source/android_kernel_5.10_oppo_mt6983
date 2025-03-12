@@ -2223,6 +2223,31 @@ void remove_signal_quality_proc(struct unipro_signal_quality_ctrl *signalCtrl)
 }
 //#endif /*OPLUS_UFS_SIGNAL_QUALITY*/
 /*feature-flashaging806-v001-2-end*/
+
+/*feature-iostack-v001-begin*/
+#define IOSTACK_WORK_DELAY  (10 * HZ)
+static void iostack_monitor_work(struct work_struct *work)
+{
+	struct ufs_mtk_host *host = container_of(to_delayed_work(work),
+							struct ufs_mtk_host,
+							iostack_work);
+	struct ufs_hba *hba = host->hba;
+	unsigned int hba_irqs = 0;
+	unsigned int self_block = hba->host->host_self_blocked;
+
+	hba_irqs = kstat_irqs_usr(hba->irq);
+	pr_err("iostack:hba_irqs = %d, self-block = %d\n", hba_irqs, self_block);
+	schedule_delayed_work(&host->iostack_work, IOSTACK_WORK_DELAY);
+}
+
+static void ufs_iostack_init(struct ufs_mtk_host *host)
+{
+	INIT_DELAYED_WORK(&host->iostack_work, iostack_monitor_work);
+	schedule_delayed_work(&host->iostack_work, IOSTACK_WORK_DELAY);
+}
+/*feature-iostack-v001-end*/
+
+
 /**
  * ufs_mtk_init - find other essential mmio bases
  * @hba: host controller instance
@@ -2338,6 +2363,7 @@ skip_vcc:
 					  unsigned int,
 					  void __user *))ufs_mtk_ioctl;
 #endif
+	ufs_iostack_init(host);
 	goto out;
 
 out_variant_clear:
@@ -2865,6 +2891,12 @@ static void ufs_mtk_fixup_dev_quirks(struct ufs_hba *hba)
 	}
 
 	ufs_mtk_install_tracepoints(hba);
+
+	/* give more time for H8 */
+	if (STR_PRFX_EQUAL("KLUFG4LHGC-B0E1", dev_info->model)) {
+		hba->rpm_lvl = UFS_PM_LVL_1;
+		hba->spm_lvl = UFS_PM_LVL_1;
+	}
 
 #if defined(CONFIG_UFSFEATURE)
 	if (hba->dev_info.wmanufacturerid == UFS_VENDOR_SAMSUNG) {
