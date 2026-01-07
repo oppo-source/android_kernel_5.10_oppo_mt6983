@@ -46,6 +46,11 @@ static int fg_bat_notifier_call(struct notifier_block *nb,
 #if CONFIG_TCPC_NOTIFIER_LATE_SYNC
 static int __tcpc_class_complete_work(struct device *dev, void *data)
 {
+#ifdef OPLUS_FEATURE_CHG_BASIC
+#if IS_ENABLED(CONFIG_OPLUS_MT6789_CHARGER)
+	struct device_node *node;
+#endif /* CONFIG_OPLUS_MT6789_CHARGER */
+#endif
 	struct tcpc_device *tcpc = dev_get_drvdata(dev);
 #if IS_ENABLED(CONFIG_USB_POWER_DELIVERY)
 #if CONFIG_RECV_BAT_ABSENT_NOTIFY && CONFIG_MTK_BATTERY
@@ -56,6 +61,13 @@ static int __tcpc_class_complete_work(struct device *dev, void *data)
 
 	if (tcpc != NULL) {
 		pr_info("%s = %s\n", __func__, dev_name(dev));
+#ifdef OPLUS_FEATURE_CHG_BASIC
+#if IS_ENABLED(CONFIG_OPLUS_MT6789_CHARGER)
+	node = of_find_node_by_path("/soc/oplus_chg_core");
+	if (node && of_property_read_bool(node, "oplus,chg_framework_v2"))
+		return 0;
+#endif /* CONFIG_OPLUS_MT6789_CHARGER */
+#endif
 		tcpc_device_irq_enable(tcpc);
 
 #if IS_ENABLED(CONFIG_USB_POWER_DELIVERY)

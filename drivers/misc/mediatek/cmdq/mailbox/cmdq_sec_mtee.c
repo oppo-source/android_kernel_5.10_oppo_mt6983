@@ -4,6 +4,7 @@
  */
 
 #include <linux/arm-smccc.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/soc/mediatek/mtk-cmdq-ext.h>
 #include "cmdq_sec_mtee.h"
 
@@ -85,11 +86,43 @@ s32 cmdq_sec_mtee_allocate_shared_memory(struct cmdq_sec_mtee_context *tee,
 	return status;
 }
 
+int cmdq_resv_mem_init(void **wsm_buffer, u32 size, void **wsm_buf_ex, u32 size_ex,
+	void **wsm_buf_ex2)
+{
+	struct device_node  *rmem_node = NULL;
+	struct reserved_mem *rmem = NULL;
+	int ret = 0;
+
+	rmem_node = of_find_compatible_node(NULL, NULL, "mediatek,cmdq-resv-mem");
+
+	if (!rmem_node) {
+		cmdq_err("error: no node for reserved cache memory");
+		return ret;
+	}
+	rmem = of_reserved_mem_lookup(rmem_node);
+	if (!rmem) {
+		cmdq_err("[%s] error: cannot lookup reserved cache memory.\n", __func__);
+		return ret;
+	}
+
+	*wsm_buffer = phys_to_virt(rmem->base);
+	*wsm_buf_ex = phys_to_virt(rmem->base + PAGE_ALIGN(size));
+	*wsm_buf_ex2 = phys_to_virt(rmem->base + PAGE_ALIGN(size) + PAGE_ALIGN(size_ex));
+	cmdq_log("%s: buffer:%p:%#x", __func__, *wsm_buffer, *wsm_buffer);
+	cmdq_log("%s: buffer:%p:%#x", __func__, *wsm_buf_ex, *wsm_buf_ex);
+	cmdq_log("%s: buffer:%p:%#x", __func__, *wsm_buf_ex2, *wsm_buf_ex2);
+
+	ret = 1;
+	return ret;
+}
+
 s32 cmdq_sec_mtee_allocate_wsm(struct cmdq_sec_mtee_context *tee,
 	void **wsm_buffer, u32 size, void **wsm_buf_ex, u32 size_ex,
 	void **wsm_buf_ex2, u32 size_ex2)
 {
 	s32 status;
+	s32 retry_cnt = 0, total_retry_cnt = 5;
+	int ret;
 
 	if (!cmdq_mtee) {
 		cmdq_msg("%s cmdq_mtee:%d not support", __func__, cmdq_mtee);
@@ -100,7 +133,16 @@ s32 cmdq_sec_mtee_allocate_wsm(struct cmdq_sec_mtee_context *tee,
 		return -EINVAL;
 
 	/* region_id = 0, mapAry = NULL for continuous */
-	*wsm_buffer = kzalloc(size, GFP_KERNEL);
+	ret = cmdq_resv_mem_init(wsm_buffer, size, wsm_buf_ex, size_ex, wsm_buf_ex2);
+
+	if(!ret) {
+		do {
+			*wsm_buffer = kzalloc(size, GFP_KERNEL);
+			if (*wsm_buffer)
+				break;
+			cmdq_err("allocate wsm_buffer failed, retry cnt:%d", retry_cnt);
+		} while (++retry_cnt < total_retry_cnt);
+	}
 	if (!*wsm_buffer)
 		return -ENOMEM;
 
@@ -118,9 +160,19 @@ s32 cmdq_sec_mtee_allocate_wsm(struct cmdq_sec_mtee_context *tee,
 		__func__, tee->wsm_pHandle, tee->wsm_handle,
 		tee->wsm_param.size, *wsm_buffer);
 
-	*wsm_buf_ex = kzalloc(size_ex, GFP_KERNEL);
-	if (!*wsm_buf_ex)
+	if(!ret) {
+		retry_cnt = 0;
+		do {
+			*wsm_buf_ex = kzalloc(size_ex, GFP_KERNEL);
+			if (*wsm_buf_ex)
+				break;
+			cmdq_err("allocate wsm_buf_ex failed, retry cnt:%d", retry_cnt);
+		} while (++retry_cnt < total_retry_cnt);
+	}
+	if (!*wsm_buf_ex) {
+		kfree(*wsm_buffer);
 		return -ENOMEM;
+	}
 
 	tee->wsm_ex_param.size = size_ex;
 	tee->wsm_ex_param.buffer = (void *)(u64)virt_to_phys(*wsm_buf_ex);
@@ -135,9 +187,20 @@ s32 cmdq_sec_mtee_allocate_wsm(struct cmdq_sec_mtee_context *tee,
 			__func__, tee->wsm_pHandle, tee->wsm_ex_handle,
 			tee->wsm_ex_param.size, *wsm_buf_ex);
 
-	*wsm_buf_ex2 = kzalloc(size_ex2, GFP_KERNEL);
-	if (!*wsm_buf_ex2)
+	if(!ret) {
+		retry_cnt = 0;
+		do {
+			*wsm_buf_ex2 = kzalloc(size_ex2, GFP_KERNEL);
+			if (*wsm_buf_ex2)
+				break;
+			cmdq_err("allocate wsm_buf_ex2 failed, retry cnt:%d", retry_cnt);
+		} while (++retry_cnt < total_retry_cnt);
+	}
+	if (!*wsm_buf_ex2) {
+		kfree(*wsm_buffer);
+		kfree(*wsm_buf_ex);
 		return -ENOMEM;
+	}
 
 	tee->wsm_ex2_param.size = size_ex2;
 	tee->wsm_ex2_param.buffer = (void *)(u64)virt_to_phys(*wsm_buf_ex2);

@@ -43,6 +43,9 @@
 /* PD */
 #include <tcpm.h>
 #include "adapter_class.h"
+#ifdef OPLUS_FEATURE_CHG_BASIC
+#include <tcpci.h>
+#endif
 
 #define PHY_MODE_DPDMPULLDOWN_SET 3
 #define PHY_MODE_DPDMPULLDOWN_CLR 4
@@ -173,6 +176,10 @@ static int pd_tcp_notifier_call(struct notifier_block *pnb,
 	struct mtk_pd_adapter_info *pinfo;
 	struct adapter_device *adapter;
 	int ret = 0, sink_mv, sink_ma;
+#ifdef OPLUS_FEATURE_CHG_BASIC
+	int rv = 0;
+	uint32_t chip_vid = 0;
+#endif
 
 	pinfo = container_of(pnb, struct mtk_pd_adapter_info, pd_nb);
 	adapter = pinfo->adapter_dev;
@@ -270,6 +277,13 @@ static int pd_tcp_notifier_call(struct notifier_block *pnb,
 		sink_ma = noti->vbus_state.ma;
 		pr_info("%s: sink vbus %dmV %dmA type(0x%02x)\n", __func__,
 			sink_mv, sink_ma, noti->vbus_state.type);
+#ifdef OPLUS_FEATURE_CHG_BASIC
+		rv = tcpci_get_chip_vid(pinfo->tcpc, &chip_vid);
+		if (!rv && SOUTHCHIP_PD_VID == chip_vid) {
+			pr_info("%s:southchip skip\n", __func__);
+			break;
+		}
+#endif
 		if (!pinfo->enable_pp) {
 			if (sink_mv && sink_ma) {
 				pinfo->enable_pp = true;

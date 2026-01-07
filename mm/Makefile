@@ -56,7 +56,7 @@ obj-y			:= filemap.o mempool.o oom_kill.o fadvise.o \
 			   mm_init.o percpu.o slab_common.o \
 			   compaction.o vmacache.o \
 			   interval_tree.o list_lru.o workingset.o \
-			   debug.o gup.o $(mmu-y)
+			   debug.o gup.o pgsize_migration.o $(mmu-y)
 
 # Give 'page_alloc' its own module-parameter namespace
 page-alloc-y := page_alloc.o
@@ -129,3 +129,7 @@ obj-$(CONFIG_MEMFD_CREATE) += memfd.o
 obj-$(CONFIG_MAPPING_DIRTY_HELPERS) += mapping_dirty_helpers.o
 obj-$(CONFIG_PTDUMP_CORE) += ptdump.o
 obj-$(CONFIG_PAGE_REPORTING) += page_reporting.o
+#ifdef OPLUS_FEATURE_PERFORMANCE_MM
+obj-$(CONFIG_OPLUS_FEATURE_PERFORMANCE_MM) += oplus_mm/
+#endif /* OPLUS_FEATURE_PERFORMANCE_MM */
+obj-$(CONFIG_CONT_PTE_HUGEPAGE) += cont_pte_hugepage.o

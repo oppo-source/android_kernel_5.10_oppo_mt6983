@@ -180,6 +180,18 @@ static void move_ptes(struct vm_area_struct *vma, pmd_t *old_pmd,
 		if (pte_none(*old_pte))
 			continue;
 
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+		/* in mremap case, new_addres might not be aligned */
+		if (pte_cont(*old_pte)) {
+#if CONFIG_CHP_ABMORMAL_PTES_DEBUG
+			{volatile bool __maybe_unused x = commit_chp_abnormal_ptes_record(DOUBLE_MAP_REASON_MOVE_PTES);}
+#endif
+			if (new_ptl == old_ptl)
+				__split_huge_cont_pte(vma, old_pte, old_addr, false, NULL, old_ptl);
+			else
+				__split_huge_cont_pte_double_ptl(vma, old_pte, old_addr, false, NULL, new_ptl, old_ptl);
+		}
+#endif
 		pte = ptep_get_and_clear(mm, old_addr, old_pte);
 		/*
 		 * If we are remapping a valid PTE, make sure
@@ -210,11 +222,44 @@ static void move_ptes(struct vm_area_struct *vma, pmd_t *old_pmd,
 		drop_rmap_locks(vma);
 }
 
+#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
+static inline bool trylock_vma_ref_count(struct vm_area_struct *vma)
+{
+	/*
+	 * If we have the only reference, swap the refcount to -1. This
+	 * will prevent other concurrent references by get_vma() for SPFs.
+	 */
+	return atomic_cmpxchg_acquire(&vma->vm_ref_count, 1, -1) == 1;
+}
+
+/*
+ * Restore the VMA reference count to 1 after a fast mremap.
+ */
+static inline void unlock_vma_ref_count(struct vm_area_struct *vma)
+{
+	int old = atomic_xchg_release(&vma->vm_ref_count, 1);
+
+	/*
+	 * This should only be called after a corresponding,
+	 * successful trylock_vma_ref_count().
+	 */
+	VM_BUG_ON_VMA(old != -1, vma);
+}
+#else	/* !CONFIG_SPECULATIVE_PAGE_FAULT */
+static inline bool trylock_vma_ref_count(struct vm_area_struct *vma)
+{
+	return true;
+}
+static inline void unlock_vma_ref_count(struct vm_area_struct *vma)
+{
+}
+#endif	/* CONFIG_SPECULATIVE_PAGE_FAULT */
+
 #ifdef CONFIG_HAVE_MOVE_PMD
 static bool move_normal_pmd(struct vm_area_struct *vma, unsigned long old_addr,
 		  unsigned long new_addr, pmd_t *old_pmd, pmd_t *new_pmd)
 {
-	spinlock_t *old_ptl, *new_ptl;
+	spinlock_t *old_ptl, *new_ptl, *old_pte_ptl;
 	struct mm_struct *mm = vma->vm_mm;
 	pmd_t pmd;
 
@@ -245,6 +290,14 @@ static bool move_normal_pmd(struct vm_area_struct *vma, unsigned long old_addr,
 		return false;
 
 	/*
+	 * We need to ensure that fast-remap is not racing with a concurrent
+	 * SPF is in progress, since a fast remap can change the vmf's pmd
+	 * and hence its ptl from under it, by moving the pmd_t entry.
+	 */
+	if (!trylock_vma_ref_count(vma))
+		return false;
+
+	/*
 	 * We don't have to worry about the ordering of src and dst
 	 * ptlocks because exclusive mmap_lock prevents deadlock.
 	 */
@@ -252,6 +305,24 @@ static bool move_normal_pmd(struct vm_area_struct *vma, unsigned long old_addr,
 	new_ptl = pmd_lockptr(mm, new_pmd);
 	if (new_ptl != old_ptl)
 		spin_lock_nested(new_ptl, SINGLE_DEPTH_NESTING);
+
+	/*
+	 * If SPF is enabled, take the ptl lock on the source page table
+	 * page, to prevent the entire pmd from being moved under a
+	 * concurrent SPF.
+	 *
+	 * There is no need to take the destination ptl lock since, mremap
+	 * has already created a hole at the destination and freed the
+	 * corresponding page tables in the process.
+	 *
+	 * NOTE: If USE_SPLIT_PTE_PTLOCKS is false, then the old_ptl, new_ptl,
+	 * and the old_pte_ptl; are all the same lock (mm->page_table_lock).
+	 * Check that the locks are different to avoid a deadlock.
+	 */
+	old_pte_ptl = pte_lockptr(mm, old_pmd);
+	if (IS_ENABLED(CONFIG_SPECULATIVE_PAGE_FAULT) && old_pte_ptl != old_ptl)
+		spin_lock(old_pte_ptl);
+
 
 	/* Clear the pmd */
 	pmd = *old_pmd;
@@ -262,10 +333,14 @@ static bool move_normal_pmd(struct vm_area_struct *vma, unsigned long old_addr,
 	/* Set the new pmd */
 	set_pmd_at(mm, new_addr, new_pmd, pmd);
 	flush_tlb_range(vma, old_addr, old_addr + PMD_SIZE);
+
+	if (IS_ENABLED(CONFIG_SPECULATIVE_PAGE_FAULT) && old_pte_ptl != old_ptl)
+		spin_unlock(old_pte_ptl);
 	if (new_ptl != old_ptl)
 		spin_unlock(new_ptl);
 	spin_unlock(old_ptl);
 
+	unlock_vma_ref_count(vma);
 	return true;
 }
 #else
@@ -277,7 +352,8 @@ static inline bool move_normal_pmd(struct vm_area_struct *vma,
 }
 #endif
 
-#ifdef CONFIG_HAVE_MOVE_PUD
+#if CONFIG_PGTABLE_LEVELS > 2 && defined(CONFIG_HAVE_MOVE_PUD) && \
+		!defined(CONFIG_SPECULATIVE_PAGE_FAULT)
 static bool move_normal_pud(struct vm_area_struct *vma, unsigned long old_addr,
 		  unsigned long new_addr, pud_t *old_pud, pud_t *new_pud)
 {
@@ -415,6 +491,9 @@ unsigned long move_page_tables(struct vm_area_struct *vma,
 	unsigned long extent, old_end;
 	struct mmu_notifier_range range;
 	pmd_t *old_pmd, *new_pmd;
+
+	if (!len)
+		return 0;
 
 	old_end = old_addr + len;
 	flush_cache_range(vma, old_addr, old_end);

@@ -22,7 +22,10 @@
 #define RT4505_DTNAME     "mediatek,flashlights_rt4505"
 #define RT4505_DTNAME_I2C "mediatek,strobe_main"
 #define RT5081_DTNAME     "mediatek,flashlights_rt5081"
-
+#define MILKWAYS3_DTNAME  "mediatek,flashlights_24267"
+#define BAIKALL4_DTNAME  "mediatek,flashlights_25221"
+#define MILKWAYS3_DTNAME_I2C "mediatek,strobe_main"
+#define BAIKALL4_DTNAME_I2C "mediatek,strobe_main"
 #define AW3644_DTNAME_I2C "mediatek,strobe_main"
 #define AW3644_DTNAME     "mediatek,flashlights_aw3644"
 #endif /* _FLASHLIGHT_DT_H */

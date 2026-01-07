@@ -168,6 +168,7 @@ struct mtk_smi_larb { /* larb: local arbiter */
 	const struct mtk_smi_larb_gen	*larb_gen;
 	int				larbid;
 	int				comm_port_id[LARB_MAX_COMMON];
+	int				suspend_check_port[LARB_MAX_COMMON];
 	u32				*mmu;
 
 	unsigned char			*bank;
@@ -177,7 +178,7 @@ struct mtk_smi_larb { /* larb: local arbiter */
 #define MAX_LARB_FOR_CLAMP		(6)
 #define RESET_CELL_NUM			(2)
 #define MAX_PD_CHECK_DEV_NUM	(2)
-#define SMI_OSTD_CNT_MASK	(0x1FFE000)
+#define SMI_OSTD_CNT_MASK	(0x7FFE000)
 
 struct mtk_smi_pd_log {
 	u8 power_status;
@@ -232,20 +233,32 @@ static void power_reset_imp(struct mtk_smi_pd *smi_pd)
 void mtk_smi_common_bw_set(struct device *dev, const u32 port, const u32 val)
 {
 	struct mtk_smi_larb *larb = dev_get_drvdata(dev);
-	struct mtk_smi *common = dev_get_drvdata(larb->smi_common);
+	u32 orig_val, write_val;
 
-	if (port >= SMI_COMMON_LARB_NR_MAX) { /* max: 8 input larbs. */
-		dev_err(dev, "%s port invalid:%d, val:%u.\n", __func__,
+	if (larb->smi_common) {
+		struct mtk_smi *common = dev_get_drvdata(larb->smi_common);
+		if (port >= SMI_COMMON_LARB_NR_MAX) { /* max: 8 input larbs. */
+			dev_notice(dev, "%s port invalid:%d, val:%u.\n", __func__,
 			port, val);
-		return;
-	}
+			return;
+		}
 
-	if (common->plat->gen == MTK_SMI_GEN3)
-		common->plat->bwl[common->commid * SMI_COMMON_LARB_NR_MAX + port] = val;
-	else if (common->plat->gen == MTK_SMI_GEN2)
-		common->plat->bwl[port] = val;
-	if (atomic_read(&common->ref_count)) {
-		writel(val, common->base + SMI_L1ARB(port));
+		orig_val = common->plat->bwl[common->commid * SMI_COMMON_LARB_NR_MAX + port];
+		write_val = orig_val;
+		write_val &= ~(0x3fff);
+		write_val |= (val & 0x3fff);
+
+		if (log_level & 1 << log_config_bit)
+			pr_info("[SMI]%s val:%#x orig_val:%#x write_val:%#x\n",
+				__func__, val, orig_val, write_val);
+
+		if (common->plat->gen == MTK_SMI_GEN3)
+			common->plat->bwl[common->commid * SMI_COMMON_LARB_NR_MAX + port] = write_val;
+		else if (common->plat->gen == MTK_SMI_GEN2)
+			common->plat->bwl[port] = write_val;
+		if (atomic_read(&common->ref_count)) {
+			writel(write_val, common->base + SMI_L1ARB(port));
+		}
 	}
 }
 EXPORT_SYMBOL_GPL(mtk_smi_common_bw_set);
@@ -1950,6 +1963,9 @@ static int mtk_smi_larb_probe(struct platform_device *pdev)
 		larb->comm_port_id[i] = -1;
 		of_property_read_u32_index(dev->of_node, "mediatek,comm-port-id",
 						i, &larb->comm_port_id[i]);
+
+		of_property_read_u32_index(dev->of_node, "mediatek,suspend-check-port",
+						i, &larb->suspend_check_port[i]);
 	}
 
 
@@ -2053,8 +2069,8 @@ static u32 mtk_smi_common_ostd_check(struct mtk_smi *common,
 	for (i = 0; i < SMI_COMMON_LARB_NR_MAX; i++) {
 		if ((check_port >> i) & 1) {
 			val = readl_relaxed(common->base + SMI_DEBUG_S(i));
-			pr_notice("[SMI] common%d: %#x=%#x, power status = %ld\n",
-				common->commid, SMI_DEBUG_S(i), val, flags);
+			//pr_notice("[SMI] common%d: %#x=%#x, power status = %ld\n",
+			//	common->commid, SMI_DEBUG_S(i), val, flags);
 			if (val & SMI_OSTD_CNT_MASK) {
 				pr_notice("[SMI] common%d suspend check fail, power status = %ld\n",
 					common->commid, flags);
@@ -2192,6 +2208,8 @@ static int __maybe_unused mtk_smi_larb_suspend(struct device *dev)
 {
 	struct mtk_smi_larb *larb = dev_get_drvdata(dev);
 	const struct mtk_smi_larb_gen *larb_gen = larb->larb_gen;
+	int i, ret;
+	struct mtk_smi *common;
 
 	atomic_dec(&larb->smi.ref_count);
 	if (log_level & 1 << log_config_bit)
@@ -2209,6 +2227,15 @@ static int __maybe_unused mtk_smi_larb_suspend(struct device *dev)
 	if (readl_relaxed(larb->base + SMI_LARB_STAT)) {
 		pr_notice("[SMI]larb:%d, suspend but busy\n", larb->larbid);
 		raw_notifier_call_chain(&smi_driver_notifier_list, larb->larbid, larb);
+	}
+
+	for (i = 0; i < LARB_MAX_COMMON; i++) {
+		if (!larb->smi_common_dev[i] || !larb->suspend_check_port[i])
+			break;
+		common = dev_get_drvdata(larb->smi_common_dev[i]);
+		ret = mtk_smi_common_ostd_check(common, larb->suspend_check_port[i], 0xf);
+		if (ret)
+			raw_notifier_call_chain(&smi_driver_notifier_list, larb->larbid, larb);
 	}
 
 	if (larb_gen->sleep_ctrl)

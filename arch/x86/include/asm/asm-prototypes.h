@@ -12,25 +12,9 @@
 #include <asm/special_insns.h>
 #include <asm/preempt.h>
 #include <asm/asm.h>
+#include <asm/nospec-branch.h>
 
 #ifndef CONFIG_X86_CMPXCHG64
 extern void cmpxchg8b_emu(void);
 #endif
 
-#ifdef CONFIG_RETPOLINE
-
-#define DECL_INDIRECT_THUNK(reg) \
-	extern asmlinkage void __x86_indirect_thunk_ ## reg (void);
-
-#define DECL_RETPOLINE(reg) \
-	extern asmlinkage void __x86_retpoline_ ## reg (void);
-
-#undef GEN
-#define GEN(reg) DECL_INDIRECT_THUNK(reg)
-#include <asm/GEN-for-each-reg.h>
-
-#undef GEN
-#define GEN(reg) DECL_RETPOLINE(reg)
-#include <asm/GEN-for-each-reg.h>
-
-#endif /* CONFIG_RETPOLINE */
