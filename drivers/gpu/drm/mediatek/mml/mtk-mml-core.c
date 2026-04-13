@@ -862,7 +862,7 @@ static void mml_core_dvfs_end(struct mml_task *task, u32 pipe)
 		}
 
 		mml_core_calc_tput(task_pipe_cur->task, max_pixel, pipe,
-			&task->end_time, &curr_time);
+			&task_pipe_cur->task->end_time, &curr_time);
 
 		throughput = 0;
 		list_for_each_entry(task_pipe_tmp, &path_clt->tasks, entry_clt) {
@@ -1032,7 +1032,10 @@ static void core_taskdone_kt_work(struct kthread_work *work)
 			mmp_data2_fence(task->fence->context, task->fence->seqno));
 	}
 
-	queue_work(task->config->wq_done, &task->wq_work_done);
+	if (task->config && task->config->wq_done)
+		queue_work(task->config->wq_done, &task->wq_work_done);
+	else
+		mml_err("wq_done is NULL!!!");
 	mml_trace_end();
 }
 
@@ -1461,7 +1464,7 @@ exit:
 	mml_trace_ex_end();
 }
 
-static void core_config_pipe1_work(struct work_struct *work)
+static void core_config_pipe1_work(struct kthread_work *work)
 {
 	struct mml_task *task;
 
@@ -1529,7 +1532,7 @@ static void core_config_task(struct mml_task *task)
 
 	/* check single pipe or (dual) pipe 1 done then callback */
 	if (cfg->dual)
-		flush_work(&task->work_config[1]);
+		kthread_flush_work(&task->work_config[1]);
 	cfg->task_ops->submit_done(task);
 
 done:
@@ -1538,7 +1541,7 @@ done:
 	mml_trace_end();
 }
 
-static void core_config_task_work(struct work_struct *work)
+static void core_config_task_work(struct kthread_work *work)
 {
 	struct mml_task *task;
 
@@ -1558,8 +1561,8 @@ struct mml_task *mml_core_create_task(void)
 	INIT_LIST_HEAD(&task->entry);
 	INIT_LIST_HEAD(&task->pipe[0].entry_clt);
 	INIT_LIST_HEAD(&task->pipe[1].entry_clt);
-	INIT_WORK(&task->work_config[0], core_config_task_work);
-	INIT_WORK(&task->work_config[1], core_config_pipe1_work);
+	kthread_init_work(&task->work_config[0], core_config_task_work);
+	kthread_init_work(&task->work_config[1], core_config_pipe1_work);
 	INIT_WORK(&task->wq_work_done, core_taskdone);
 	kthread_init_work(&task->kt_work_done, core_taskdone_kt_work);
 
@@ -1615,9 +1618,12 @@ void mml_core_deinit_config(struct mml_frame_config *cfg)
 
 	/* make command, engine allocated private data */
 	for (pipe = 0; pipe < MML_PIPE_CNT; pipe++) {
-		for (i = 0; i < cfg->path[pipe]->node_cnt; i++)
-			kfree(cfg->cache[pipe].cfg[i].data);
-		destroy_tile_output(cfg->tile_output[pipe]);
+		if (cfg->path[pipe]) {
+			for (i = 0; i < cfg->path[pipe]->node_cnt; i++)
+				kfree(cfg->cache[pipe].cfg[i].data);
+		}
+		if (cfg->tile_output[pipe])
+			destroy_tile_output(cfg->tile_output[pipe]);
 	}
 	core_destroy_wq(&cfg->wq_done);
 }

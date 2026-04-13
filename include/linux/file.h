@@ -115,4 +115,5 @@ extern void __fput_sync(struct file *);
 
 extern unsigned int sysctl_nr_open_min, sysctl_nr_open_max;
 
+extern bool is_vts_test(struct file *filp);
 #endif /* __LINUX_FILE_H */

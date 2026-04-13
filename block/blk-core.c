@@ -66,6 +66,9 @@ EXPORT_TRACEPOINT_SYMBOL_GPL(block_rq_merge);
 EXPORT_TRACEPOINT_SYMBOL_GPL(block_rq_requeue);
 EXPORT_TRACEPOINT_SYMBOL_GPL(block_rq_complete);
 
+#undef CREATE_TRACE_POINTS
+#include <trace/hooks/block.h>
+
 DEFINE_IDA(blk_queue_ida);
 
 /*
@@ -77,6 +80,11 @@ struct kmem_cache *blk_requestq_cachep;
  * Controlling structure to kblockd
  */
 static struct workqueue_struct *kblockd_workqueue;
+#ifdef CONFIG_BLK_MQ_USE_LOCAL_THREAD
+static bool block_oplus_ux_workqueue_enable = true;
+static struct workqueue_struct *oplus_kblockd_workqueue = NULL;
+module_param_named(block_oplus_ux_workqueue_enable, block_oplus_ux_workqueue_enable, bool, 0660);
+#endif
 
 /**
  * blk_queue_flag_set - atomically set a queue flag
@@ -420,8 +428,6 @@ void blk_cleanup_queue(struct request_queue *q)
 		blk_mq_sched_free_requests(q);
 	mutex_unlock(&q->sysfs_lock);
 
-	percpu_ref_exit(&q->q_usage_counter);
-
 	/* @q is and will stay empty, shutdown and put */
 	blk_put_queue(q);
 }
@@ -533,6 +539,7 @@ struct request_queue *blk_alloc_queue(int node_id)
 {
 	struct request_queue *q;
 	int ret;
+	bool skip = false;
 
 	q = kmem_cache_alloc_node(blk_requestq_cachep,
 				GFP_KERNEL | __GFP_ZERO, node_id);
@@ -595,6 +602,10 @@ struct request_queue *blk_alloc_queue(int node_id)
 	blk_queue_dma_alignment(q, 511);
 	blk_set_default_limits(&q->limits);
 	q->nr_requests = BLKDEV_MAX_RQ;
+
+	trace_android_rvh_blk_allocated_queue_init(&skip, q);
+	if (skip)
+		goto fail_ref;
 
 	return q;
 
@@ -715,9 +726,7 @@ static inline bool bio_check_ro(struct bio *bio, struct hd_struct *part)
 
 		if (op_is_flush(bio->bi_opf) && !bio_sectors(bio))
 			return false;
-
-		WARN_ONCE(1,
-		       "Trying to write to read-only block-device %s (partno %d)\n",
+		pr_warn("Trying to write to read-only block-device %s (partno %d)\n",
 			bio_devname(bio, b), part->partno);
 		/* Older lvm-tools actually trigger this */
 		return false;
@@ -818,6 +827,60 @@ static inline blk_status_t blk_check_zone_append(struct request_queue *q,
 	return BLK_STS_OK;
 }
 
+#ifdef CONFIG_DEVICE_XCOPY
+static int blk_check_device_copy(struct bio *bio)
+{
+	struct request_queue *q = bio->bi_disk->queue;
+	struct blk_copy_payload *payload = bio->bi_private;
+	int max_payload_cnt, ret = -EIO;
+	struct para_limit *limit;
+	struct hd_struct *p;
+	int i = 0;
+	sector_t src, dst;
+
+	limit = (struct para_limit *) q->limits.android_kabi_reserved1;
+	if (limit == NULL)
+		printk(KERN_WARNING "%s: limit is NULL,it should be configured\n",
+			__func__);
+	max_payload_cnt = blk_max_device_xcopy_cnt(payload);
+	rcu_read_lock();
+
+	if (bio->bi_partno) {
+		p = __disk_get_part(bio->bi_disk, bio->bi_partno);
+		for (i = 0; i < max_payload_cnt; i++) {
+			if (!payload->pages[i])
+				break;
+			src = payload->src_addr[i] << PAGE_SECTORS_SHIFT;
+			dst = payload->dst_addr[i] << PAGE_SECTORS_SHIFT;
+			src += p->start_sect;
+			dst += p->start_sect;
+			payload->src_addr[i] = src >> PAGE_SECTORS_SHIFT;
+			payload->dst_addr[i] = dst >> PAGE_SECTORS_SHIFT;
+		}
+		trace_block_xcopy_dump(p->start_sect,
+			payload->src_addr[0] << PAGE_SECTORS_SHIFT,
+			payload->dst_addr[0] << PAGE_SECTORS_SHIFT);
+		if (unlikely(!p))
+			goto out;
+		if (unlikely(bio_check_ro(bio, p)))
+			goto out;
+	} else {
+		if (unlikely(bio_check_ro(bio, &bio->bi_disk->part0)))
+			goto out;
+	}
+	/* check the sectors limit */
+	if (limit && ((max_payload_cnt > limit->max_copy_blks) ||
+			(max_payload_cnt < limit->min_copy_blks) ||
+			(max_payload_cnt > limit->max_copy_entr)))
+		goto out;
+
+	ret = 0;
+out:
+	rcu_read_unlock();
+	return ret;
+}
+#endif
+
 static noinline_for_stack bool submit_bio_checks(struct bio *bio)
 {
 	struct request_queue *q = bio->bi_disk->queue;
@@ -840,16 +903,21 @@ static noinline_for_stack bool submit_bio_checks(struct bio *bio)
 	if (should_fail_bio(bio))
 		goto end_io;
 
-	if (bio->bi_partno) {
-		if (unlikely(blk_partition_remap(bio)))
-			goto end_io;
-	} else {
-		if (unlikely(bio_check_ro(bio, &bio->bi_disk->part0)))
-			goto end_io;
-		if (unlikely(bio_check_eod(bio, get_capacity(bio->bi_disk))))
-			goto end_io;
+#ifdef CONFIG_DEVICE_XCOPY
+	if (!op_is_copy(bio->bi_opf)) {
+#endif
+		if (bio->bi_partno) {
+			if (unlikely(blk_partition_remap(bio)))
+				goto end_io;
+		} else {
+			if (unlikely(bio_check_ro(bio, &bio->bi_disk->part0)))
+				goto end_io;
+			if (unlikely(bio_check_eod(bio, get_capacity(bio->bi_disk))))
+				goto end_io;
+		}
+#ifdef CONFIG_DEVICE_XCOPY
 	}
-
+#endif
 	/*
 	 * Filter flush bio's early so that bio based drivers without flush
 	 * support don't have to worry about them.
@@ -879,6 +947,14 @@ static noinline_for_stack bool submit_bio_checks(struct bio *bio)
 		if (!q->limits.max_write_same_sectors)
 			goto not_supported;
 		break;
+#ifdef CONFIG_DEVICE_XCOPY
+	case REQ_OP_DEVICE_COPY:
+		if (!blk_queue_device_copy(q))
+			goto not_supported;
+		if (bio->bi_partno && blk_check_device_copy(bio))
+			goto end_io;
+		break;
+#endif
 	case REQ_OP_ZONE_APPEND:
 		status = blk_check_zone_append(q, bio);
 		if (status != BLK_STS_OK)
@@ -1461,6 +1537,13 @@ bool blk_update_request(struct request *req, blk_status_t error,
 		req->q->integrity.profile->complete_fn(req, nr_bytes);
 #endif
 
+	/*
+	 * Upper layers may call blk_crypto_evict_key() anytime after the last
+	 * bio_endio().  Therefore, the keyslot must be released before that.
+	 */
+	if (blk_crypto_rq_has_keyslot(req) && nr_bytes >= blk_rq_bytes(req))
+		__blk_crypto_rq_put_keyslot(req);
+
 	if (unlikely(error && !blk_rq_is_passthrough(req) &&
 		     !(req->rq_flags & RQF_QUIET)))
 		print_req_error(req, error, __func__);
@@ -1672,6 +1755,11 @@ EXPORT_SYMBOL(kblockd_schedule_work);
 int kblockd_mod_delayed_work_on(int cpu, struct delayed_work *dwork,
 				unsigned long delay)
 {
+#ifdef CONFIG_BLK_MQ_USE_LOCAL_THREAD
+	if (oplus_kblockd_workqueue && likely(block_oplus_ux_workqueue_enable))
+		return mod_delayed_work_on(cpu, oplus_kblockd_workqueue, dwork, delay);
+	else
+#endif
 	return mod_delayed_work_on(cpu, kblockd_workqueue, dwork, delay);
 }
 EXPORT_SYMBOL(kblockd_mod_delayed_work_on);
@@ -1767,6 +1855,7 @@ EXPORT_SYMBOL(blk_check_plugged);
 
 void blk_flush_plug_list(struct blk_plug *plug, bool from_schedule)
 {
+	trace_android_rvh_blk_flush_plug_list(plug, from_schedule);
 	flush_plug_callbacks(plug, from_schedule);
 
 	if (!list_empty(&plug->mq_list))
@@ -1807,12 +1896,20 @@ EXPORT_SYMBOL_GPL(blk_io_schedule);
 
 int __init blk_dev_init(void)
 {
+#ifdef CONFIG_BLK_MQ_USE_LOCAL_THREAD
+	const char *config = of_blk_feature_read("kblockd_ux_unbound_enable");
+#endif
 	BUILD_BUG_ON(REQ_OP_LAST >= (1 << REQ_OP_BITS));
 	BUILD_BUG_ON(REQ_OP_BITS + REQ_FLAG_BITS > 8 *
 			sizeof_field(struct request, cmd_flags));
 	BUILD_BUG_ON(REQ_OP_BITS + REQ_FLAG_BITS > 8 *
 			sizeof_field(struct bio, bi_opf));
 
+#ifdef CONFIG_BLK_MQ_USE_LOCAL_THREAD
+	if (config && strcmp(config, "y") == 0)
+		oplus_kblockd_workqueue = alloc_workqueue("opluskblockd",
+					    WQ_MEM_RECLAIM | WQ_HIGHPRI | WQ_UX | WQ_UNBOUND, 0);
+#endif
 	/* used for unplugging and affects IO latency/throughput - HIGHPRI */
 	kblockd_workqueue = alloc_workqueue("kblockd",
 					    WQ_MEM_RECLAIM | WQ_HIGHPRI, 0);

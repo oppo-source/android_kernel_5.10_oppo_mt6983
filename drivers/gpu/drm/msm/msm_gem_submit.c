@@ -494,8 +494,8 @@ static struct msm_submit_post_dep *msm_parse_post_deps(struct drm_device *dev,
 	int ret = 0;
 	uint32_t i, j;
 
-	post_deps = kmalloc_array(nr_syncobjs, sizeof(*post_deps),
-	                          GFP_KERNEL | __GFP_NOWARN | __GFP_NORETRY);
+	post_deps = kcalloc(nr_syncobjs, sizeof(*post_deps),
+			    GFP_KERNEL | __GFP_NOWARN | __GFP_NORETRY);
 	if (!post_deps)
 		return ERR_PTR(-ENOMEM);
 
@@ -510,7 +510,6 @@ static struct msm_submit_post_dep *msm_parse_post_deps(struct drm_device *dev,
 		}
 
 		post_deps[i].point = syncobj_desc.point;
-		post_deps[i].chain = NULL;
 
 		if (syncobj_desc.flags) {
 			ret = -EINVAL;
@@ -524,9 +523,7 @@ static struct msm_submit_post_dep *msm_parse_post_deps(struct drm_device *dev,
 				break;
 			}
 
-			post_deps[i].chain =
-				kmalloc(sizeof(*post_deps[i].chain),
-				        GFP_KERNEL);
+			post_deps[i].chain = dma_fence_chain_alloc();
 			if (!post_deps[i].chain) {
 				ret = -ENOMEM;
 				break;
@@ -543,7 +540,7 @@ static struct msm_submit_post_dep *msm_parse_post_deps(struct drm_device *dev,
 
 	if (ret) {
 		for (j = 0; j <= i; ++j) {
-			kfree(post_deps[j].chain);
+			dma_fence_chain_free(post_deps[j].chain);
 			if (post_deps[j].syncobj)
 				drm_syncobj_put(post_deps[j].syncobj);
 		}

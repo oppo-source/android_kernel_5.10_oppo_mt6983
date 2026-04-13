@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+* Copyright (C) 2018-2020 Oplus. All rights reserved.
+*/
+&odm {
+	sensor_fb: sensor_fb {
+		compatible = "oplus,sensor-feedback";
+	};
+	oplus_sensor:oplus_sensor {
+		compatible = "oplus,sensor-devinfo";
+		als-row-coe = <1000>;
+		/* sensor start */
+		/*
+		enum {
+			LIS3DH,
+			LSM6DS3,
+			BMI160,
+			LIS2HH12,
+			LSM6DSM,
+			BMI2XY,
+			LSM6DSO,
+			ICM4X6XX,
+			ICM4263X,
+			ICM4N607,
+			BMI22X,
+			SC7A20,
+			MC34X9,
+		};
+		*/
+		gsensor_1: gsensor_1 {
+			status = "okay";
+			sensor_name = <11>;//SC7A20
+			i2c_num = <1>;
+			i2c_addr = <0>;
+			direction = <3>;
+			eint_num = <2>;
+			acc_cali_range= <300 300 300>;
+			stdev_xyz = <40>;
+			gyro_gain = <150>;
+			filter_param_l = <1>;
+			filter_param_h = <8>;
+                };
+		/*
+		enum {
+			AKM09911,
+			MMC3530,
+			MMC5603,
+			MXG4300,
+		};
+		*/
+		msensor_1: msensor_1 {
+			status = "okay";
+			sensor_name = <3>;//MXG4300
+			i2c_num = <0>;
+			i2c_addr = <0x0C>;
+			direction = <2>;
+			eint_num = <0>;
+			soft-mag-parameter = <10794 0 281 1 188 0 272 1 9901 0 149 0 6 1 36 1 10326 0>;
+		};
+		/*enum {
+			TMD2725,
+			APSD9922,
+			STK3335,
+			STK3331,
+			STK2232,
+			TCS3701,
+			STK32600,
+			STK33502,
+			MN78911,
+			TCS3720,
+			SIP3515,
+			STK3329,
+			LTR569,
+			SIP3510,
+			SIP3625,
+			STK33C01,
+			SIP3535,
+			STK63701,
+			TMD2765,
+			SIP3511,
+			SIP1221,
+			HX3222ARNL,
+		};*/
+		light_1: light_1 {
+			status = "okay";
+			sensor_name = <20>;//SIP1221LR1N
+			i2c_num = <0>;
+			i2c_addr = <0x58>;
+                };
+                light_2: light_2 {
+                        status = "okay";
+                        sensor_name = <21>;//HX3222ARNL
+                        i2c_num = <0>;
+                        i2c_addr = <0x2B>;
+                };
+		/*
+		enum {
+			SX933x,
+			SX937x,
+		};
+		*/
+		sar_1: sar_1 {
+			status = "okay";
+			sensor_name = <1>;//SX937x
+			i2c_num = <0>;
+			i2c_addr = <0x2c>;
+			direction = <0>;
+			eint_num = <5>;
+			channel_num = <4>;
+			channel_0_min = <0>;
+			channel_0_max = <70000>;
+			channel_1_min = <0>;
+			channel_1_max = <70000>;
+			channel_2_min = <0>;
+			channel_2_max = <70000>;
+			channel_3_min = <0>;
+			channel_3_max = <70000>;
+			reg_table_num = <6>; ////wifi:6--2_channels，LTE:5--4_channels
+                        sup_move_detect = <1>;
+		};
+	};
+/* sensor end */
+};
+&mt6358_vsim2_reg {
+	regulator-min-microvolt = <1800000>;
+	regulator-max-microvolt = <1800000>;
+	regulator-always-on;
+	regulator-boot-on;
+};

@@ -33,9 +33,9 @@ struct mml_dle_ctx {
 	const struct mml_task_ops *task_ops;
 	const struct mml_config_ops *cfg_ops;
 	atomic_t job_serial;
-	struct workqueue_struct *wq_config;
+	struct kthread_worker *kt_config;
 	struct workqueue_struct *wq_destroy;
-	struct kthread_worker kt_done;
+	struct kthread_worker *kt_done;
 	struct task_struct *kt_done_task;
 	bool dl_dual;
 	void (*config_cb)(struct mml_task *task, void *cb_param);
@@ -75,11 +75,9 @@ static struct mml_frame_config *frame_config_find_reuse(
 	mml_trace_ex_begin("%s", __func__);
 
 	list_for_each_entry(cfg, &ctx->configs, entry) {
-		if (submit->update && cfg->last_jobid == submit->job->jobid)
-			goto done;
-
 		if (check_frame_change(&submit->info, cfg) &&
-		    check_dle_frame_change(dle_info, cfg))
+		    check_dle_frame_change(dle_info, cfg) &&
+		    !cfg->err)
 			goto done;
 
 		idx++;
@@ -186,6 +184,11 @@ static struct mml_frame_config *frame_config_create(
 		return ERR_PTR(-ENOMEM);
 	cfg = &dle_cfg->c;
 	mml_core_init_config(cfg);
+	if (!cfg->wq_done) {
+		mml_err("[dle] fail to alloc wq_done\n");
+		kfree(dle_cfg);
+		return ERR_PTR(-ENOMEM);
+	}
 
 	list_add(&cfg->entry, &ctx->configs);
 	ctx->config_cnt++;
@@ -196,7 +199,7 @@ static struct mml_frame_config *frame_config_create(
 	cfg->mml = ctx->mml;
 	cfg->task_ops = ctx->task_ops;
 	cfg->cfg_ops = ctx->cfg_ops;
-	cfg->ctx_kt_done = &ctx->kt_done;
+	cfg->ctx_kt_done = ctx->kt_done;
 	INIT_WORK(&cfg->work_destroy, frame_config_destroy_work);
 	kref_init(&cfg->ref);
 
@@ -258,6 +261,17 @@ static void task_move_to_running(struct mml_task *task)
 		task->config->done_task_cnt);
 }
 
+static void task_move_to_destroy(struct kref *kref)
+{
+	struct mml_task *task = container_of(kref,
+		struct mml_task, ref);
+
+	if (task->config)
+		kref_put(&task->config->ref, frame_config_queue_destroy);
+
+	mml_core_destroy_task(task);
+}
+
 static void task_move_to_idle(struct mml_task *task)
 {
 	/* Must lock ctx->config_mutex before call */
@@ -276,25 +290,26 @@ static void task_move_to_idle(struct mml_task *task)
 
 	list_del_init(&task->entry);
 	task->state = MML_TASK_IDLE;
-	list_add_tail(&task->entry, &task->config->done_tasks);
-	task->config->done_task_cnt++;
 
-	mml_msg("[dle]%s task cnt (%u %u %hhu)",
-		__func__,
-		task->config->await_task_cnt,
-		task->config->run_task_cnt,
-		task->config->done_task_cnt);
-}
+	if (unlikely(task->err)) {
+		mml_err("[dle]%s task cnt (%u %u %u) before error put",
+			__func__,
+			task->config->await_task_cnt,
+			task->config->run_task_cnt,
+			task->config->done_task_cnt);
 
-static void task_move_to_destroy(struct kref *kref)
-{
-	struct mml_task *task = container_of(kref,
-		struct mml_task, ref);
+		/* do not reuse this one, it error before */
+		kref_put(&task->ref, task_move_to_destroy);
+	} else {
+		list_add_tail(&task->entry, &task->config->done_tasks);
+		task->config->done_task_cnt++;
 
-	if (task->config)
-		kref_put(&task->config->ref, frame_config_queue_destroy);
-
-	mml_core_destroy_task(task);
+		mml_msg("[dle]%s task cnt (%u %u %hhu)",
+			__func__,
+			task->config->await_task_cnt,
+			task->config->run_task_cnt,
+			task->config->done_task_cnt);
+	}
 }
 
 static void task_config_done(struct mml_task *task)
@@ -393,8 +408,8 @@ static void task_frame_err(struct mml_task *task)
 
 	mml_trace_ex_begin("%s", __func__);
 
-	mml_msg("[dle]config err task %p state %u job %u",
-		task, task->state, task->job.jobid);
+	mml_err("[dle]config %p err task %p state %u job %u",
+		cfg, task, task->state, task->job.jobid);
 
 	/* clean up */
 	task_buf_put(task);
@@ -408,7 +423,9 @@ static void task_frame_err(struct mml_task *task)
 		cfg->run_task_cnt,
 		cfg->done_task_cnt,
 		task->state);
-	kref_put(&task->ref, task_move_to_destroy);
+
+	task->err = true;
+	cfg->err = true;
 
 	mutex_unlock(&ctx->config_mutex);
 
@@ -513,7 +530,7 @@ s32 mml_dle_config(struct mml_dle_ctx *ctx, struct mml_submit *submit,
 {
 	struct mml_frame_config *cfg;
 	struct mml_task *task;
-	s32 result;
+	s32 result = 0;
 	u32 i;
 
 	mml_trace_begin("%s", __func__);
@@ -632,6 +649,8 @@ s32 mml_dle_config(struct mml_dle_ctx *ctx, struct mml_submit *submit,
 
 	/* get config from core */
 	mml_core_config_task(cfg, task);
+	if (cfg->err)
+		result = -EINVAL;
 
 	mml_trace_end();
 	return result;
@@ -762,7 +781,7 @@ static void task_queue(struct mml_task *task, u32 pipe)
 	struct mml_dle_ctx *ctx = task->ctx;
 
 	if (pipe)
-		queue_work(ctx->wq_config, &task->work_config[pipe]);
+		kthread_queue_work(ctx->kt_config, &task->work_config[pipe]);
 	else
 		mml_err("[dle] should not queue pipe %d", pipe);
 }
@@ -817,8 +836,8 @@ static struct mml_dle_ctx *dle_ctx_create(struct mml_dev *mml,
 		return ERR_PTR(-ENOMEM);
 
 	/* create taskdone kthread first cause it is more easy for fail case */
-	kthread_init_worker(&ctx->kt_done);
-	taskdone_task = kthread_run(kthread_worker_fn, &ctx->kt_done, "mml_dle_done");
+	kthread_init_worker(ctx->kt_done);
+	taskdone_task = kthread_run(kthread_worker_fn, ctx->kt_done, "mml_dle_done");
 	if (IS_ERR(taskdone_task)) {
 		mml_err("[dle]fail to create kt taskdone %d", (s32)PTR_ERR(taskdone_task));
 		kfree(ctx);
@@ -834,7 +853,7 @@ static struct mml_dle_ctx *dle_ctx_create(struct mml_dev *mml,
 	ctx->wq_destroy = alloc_ordered_workqueue("mml_destroy_dl", 0, 0);
 	ctx->dl_dual = dl->dual;
 	ctx->config_cb = dl->config_cb;
-	ctx->wq_config = alloc_ordered_workqueue("mml_work_dl", WORK_CPU_UNBOUND | WQ_HIGHPRI, 0);
+	ctx->kt_config = kthread_create_worker(0, "mml_work_dl");
 
 	return ctx;
 }
@@ -868,10 +887,10 @@ static void dle_ctx_release(struct mml_dle_ctx *ctx)
 
 	mutex_unlock(&ctx->config_mutex);
 	destroy_workqueue(ctx->wq_destroy);
-	destroy_workqueue(ctx->wq_config);
-	kthread_flush_worker(&ctx->kt_done);
+	kthread_destroy_worker(ctx->kt_config);
+	kthread_flush_worker(ctx->kt_done);
 	kthread_stop(ctx->kt_done_task);
-	kthread_destroy_worker(&ctx->kt_done);
+	kthread_destroy_worker(ctx->kt_done);
 	for (i = 0; i < ARRAY_SIZE(ctx->tile_cache); i++) {
 		for (j = 0; j < ARRAY_SIZE(ctx->tile_cache[i].func_list); j++)
 			kfree(ctx->tile_cache[i].func_list[j]);

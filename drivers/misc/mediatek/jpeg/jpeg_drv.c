@@ -49,16 +49,38 @@ static struct dmabuf_info bufInfo[HW_CORE_NUMBER];
 int jpg_dbg_level;
 module_param(jpg_dbg_level, int, 0644);
 
+static void jpeg_drv_hybrid_dec_dump_register_setting(int id)
+{
+	unsigned int regs[8];
+	int i = 0, j = 0;
+
+	JPEG_LOG(0, "start dump id: %d", id);
+	for (i = 0x90; i < 0x370; i += 32) {
+		for (j = 0; j < 8; j++)
+			regs[j] = IMG_REG_READ(JPEG_HYBRID_DEC_BASE(id) + i + j * 4);
+
+		JPEG_LOG(0, "0x%03x: 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
+			 i, regs[0], regs[1], regs[2], regs[3],
+			 regs[4], regs[5], regs[6], regs[7]);
+	}
+	for (i = 0; i < 6; i++)
+		regs[i] = IMG_REG_READ(JPEG_HYBRID_DEC_BASE(id) + 0x370 + i * 4);
+	JPEG_LOG(0, "0x370: 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x",
+		 regs[0], regs[1], regs[2], regs[3], regs[4], regs[5]);
+}
+
 static int jpeg_isr_hybrid_dec_lisr(int id)
 {
 	unsigned int tmp = 0;
 
-	tmp = IMG_REG_READ(REG_JPGDEC_HYBRID_274(id));
-	if (tmp) {
-		_jpeg_hybrid_dec_int_status[id] = tmp;
-		IMG_REG_WRITE(tmp, REG_JPGDEC_HYBRID_274(id));
-		JPEG_LOG(1, "return 0");
-		return 0;
+	if (dec_hwlocked[id]) {
+		tmp = IMG_REG_READ(REG_JPGDEC_HYBRID_274(id));
+		if (tmp) {
+			_jpeg_hybrid_dec_int_status[id] = tmp;
+			IMG_REG_WRITE(tmp, REG_JPGDEC_HYBRID_274(id));
+			JPEG_LOG(1, "return 0");
+			return 0;
+		}
 	}
 	JPEG_LOG(1, "return -1");
 	return -1;
@@ -79,6 +101,7 @@ static int jpeg_drv_hybrid_dec_start(unsigned int data[],
 	obuf_iova = 0;
 	node_id = id / 2;
 
+	mutex_lock(&jpeg_hybrid_dec_lock);
 	bufInfo[id].o_dbuf = jpg_dmabuf_alloc(data[20], 128, 0);
 	bufInfo[id].o_attach = NULL;
 	bufInfo[id].o_sgt = NULL;
@@ -88,12 +111,14 @@ static int jpeg_drv_hybrid_dec_start(unsigned int data[],
 	bufInfo[id].i_sgt = NULL;
 
 	if (!bufInfo[id].o_dbuf) {
-	    JPEG_LOG(0, "o_dbuf alloc failed");
+		mutex_unlock(&jpeg_hybrid_dec_lock);
+		JPEG_LOG(0, "o_dbuf alloc failed");
 		return -1;
 	}
 
 	if (!bufInfo[id].i_dbuf) {
-	    JPEG_LOG(0, "i_dbuf null error");
+		mutex_unlock(&jpeg_hybrid_dec_lock);
+		JPEG_LOG(0, "i_dbuf null error");
 		return -1;
 	}
 
@@ -116,8 +141,15 @@ static int jpeg_drv_hybrid_dec_start(unsigned int data[],
 		(unsigned long)(unsigned char*)(ibuf_iova>>32));
 
 	if (ret != 0) {
+		mutex_unlock(&jpeg_hybrid_dec_lock);
 		JPEG_LOG(0, "get iova fail i:0x%llx o:0x%llx", ibuf_iova, obuf_iova);
 		return ret;
+	}
+
+	if (!dec_hwlocked[id]) {
+		mutex_unlock(&jpeg_hybrid_dec_lock);
+		JPEG_LOG(0, "hw %d unlocked, start fail", id);
+		return -1;
 	}
 
 	IMG_REG_WRITE(data[0], REG_JPGDEC_HYBRID_090(id));
@@ -146,6 +178,9 @@ static int jpeg_drv_hybrid_dec_start(unsigned int data[],
 	IMG_REG_WRITE(data[17], REG_JPGDEC_HYBRID_33C(id));
 	IMG_REG_WRITE(data[18], REG_JPGDEC_HYBRID_344(id));
 	IMG_REG_WRITE(data[19], REG_JPGDEC_HYBRID_240(id));
+
+	gJpegqDev.is_dec_started[id] = true;
+	mutex_unlock(&jpeg_hybrid_dec_lock);
 
 	JPEG_LOG(1, "-");
 	return ret;
@@ -346,10 +381,10 @@ static int jpeg_drv_hybrid_dec_lock(int *hwid)
 			continue;
 		} else {
 			*hwid = id;
-			dec_hwlocked[id] = true;
 			JPEG_LOG(1, "jpeg dec get %d HW core", id);
 			_jpeg_hybrid_dec_int_status[id] = 0;
 			jpeg_drv_hybrid_dec_power_on(id);
+			dec_hwlocked[id] = true;
 			enable_irq(gJpegqDev.hybriddecIrqId[id]);
 			break;
 		}
@@ -371,10 +406,10 @@ static void jpeg_drv_hybrid_dec_unlock(unsigned int hwid)
 	if (!dec_hwlocked[hwid]) {
 		JPEG_LOG(0, "try to unlock a free core %d", hwid);
 	} else {
-		dec_hwlocked[hwid] = false;
-		JPEG_LOG(1, "jpeg dec HW core %d is unlocked", hwid);
-		jpeg_drv_hybrid_dec_power_off(hwid);
 		disable_irq(gJpegqDev.hybriddecIrqId[hwid]);
+		dec_hwlocked[hwid] = false;
+		jpeg_drv_hybrid_dec_power_off(hwid);
+		JPEG_LOG(1, "jpeg dec HW core %d is unlocked", hwid);
 		jpg_dmabuf_free_iova(bufInfo[hwid].i_dbuf,
 			bufInfo[hwid].i_attach,
 			bufInfo[hwid].i_sgt);
@@ -383,7 +418,10 @@ static void jpeg_drv_hybrid_dec_unlock(unsigned int hwid)
 			bufInfo[hwid].o_sgt);
 		jpg_dmabuf_put(bufInfo[hwid].i_dbuf);
 		jpg_dmabuf_put(bufInfo[hwid].o_dbuf);
+		bufInfo[hwid].i_dbuf = NULL;
+		bufInfo[hwid].o_dbuf = NULL;
 		// we manually add 1 ref count, need to put it.
+		gJpegqDev.is_dec_started[hwid] = false;
 	}
 	mutex_unlock(&jpeg_hybrid_dec_lock);
 }
@@ -550,6 +588,13 @@ static int jpeg_hybrid_dec_ioctl(unsigned int cmd, unsigned long arg,
 			JPEG_LOG(0, "get hybrid dec id failed");
 			return -EFAULT;
 		}
+		mutex_lock(&jpeg_hybrid_dec_lock);
+		if (!gJpegqDev.is_dec_started[hwid]) {
+			JPEG_LOG(0, "Wait before decode get started");
+			mutex_unlock(&jpeg_hybrid_dec_lock);
+			return -EFAULT;
+		}
+		mutex_unlock(&jpeg_hybrid_dec_lock);
 	#ifdef FPGA_VERSION
 		JPEG_LOG(1, "Polling JPEG Hybrid Dec Status hwid: %d",
 				hwid);
@@ -575,9 +620,19 @@ static int jpeg_hybrid_dec_ioctl(unsigned int cmd, unsigned long arg,
 					hybrid_dec_wait_queue[hwid],
 					_jpeg_hybrid_dec_int_status[hwid],
 					timeout_jiff);
-				if (ret == 0)
-					JPEG_LOG(0,
-					"JPEG Hybrid Dec Wait timeout!");
+				if (ret == 0) {
+					JPEG_LOG(0, "JPEG Hybrid Dec Wait timeout!");
+					mutex_lock(&jpeg_hybrid_dec_lock);
+					if (dec_hwlocked[hwid]) {
+						jpeg_drv_hybrid_dec_dump_register_setting(hwid);
+
+						/*trigger smi dump to get more info.*/
+						mtk_smi_dbg_hang_detect("JPEG DEC");
+					} else {
+						JPEG_LOG(0, "wait dec_hwlocked hw: %d", hwid);
+					}
+					mutex_unlock(&jpeg_hybrid_dec_lock);
+				}
 				if (ret < 0) {
 					waitfailcnt++;
 					JPEG_LOG(0,
@@ -599,8 +654,12 @@ static int jpeg_hybrid_dec_ioctl(unsigned int cmd, unsigned long arg,
 			return -EFAULT;
 		}
 
-		IMG_REG_WRITE(0x0, REG_JPGDEC_HYBRID_090(hwid));
-		IMG_REG_WRITE(0x00000010, REG_JPGDEC_HYBRID_090(hwid));
+		mutex_lock(&jpeg_hybrid_dec_lock);
+		if (dec_hwlocked[hwid]) {
+			IMG_REG_WRITE(0x0, REG_JPGDEC_HYBRID_090(hwid));
+			IMG_REG_WRITE(0x00000010, REG_JPGDEC_HYBRID_090(hwid));
+		}
+		mutex_unlock(&jpeg_hybrid_dec_lock);
 
 		jpeg_drv_hybrid_dec_unlock(hwid);
 		break;
@@ -833,6 +892,17 @@ static int jpeg_probe(struct platform_device *pdev)
 
 	JPEG_LOG(0, "JPEG Probe");
 	atomic_inc(&nodeCount);
+
+	for (i = 0; i < HW_CORE_NUMBER; i++) {
+		bufInfo[i].o_dbuf = NULL;
+		bufInfo[i].o_attach = NULL;
+		bufInfo[i].o_sgt = NULL;
+
+		bufInfo[i].i_dbuf = NULL;
+		bufInfo[i].i_attach = NULL;
+		bufInfo[i].i_sgt = NULL;
+		JPEG_LOG(1, "initializing io dma buf for core id: %d", i);
+	}
 
 	node_index = jpeg_get_node_index(pdev->dev.of_node->name);
 

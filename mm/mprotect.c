@@ -17,6 +17,7 @@
 #include <linux/highmem.h>
 #include <linux/security.h>
 #include <linux/mempolicy.h>
+#include <linux/pgsize_migration.h>
 #include <linux/personality.h>
 #include <linux/syscalls.h>
 #include <linux/swap.h>
@@ -71,6 +72,9 @@ static unsigned long change_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
 
 	flush_tlb_batched_pending(vma->vm_mm);
 	arch_enter_lazy_mmu_mode();
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+again_pte:
+#endif
 	do {
 		oldpte = *pte;
 		if (pte_present(oldpte)) {
@@ -112,7 +116,31 @@ static unsigned long change_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
 				if (target_node == page_to_nid(page))
 					continue;
 			}
-
+#ifdef CONFIG_CONT_PTE_HUGEPAGE
+			if (pte_cont(oldpte)) {
+				unsigned long next = pte_cont_addr_end(addr, end);
+				bool anon = vma_is_anonymous(vma);
+#if CONFIG_CHP_ABMORMAL_PTES_DEBUG
+				{volatile bool __maybe_unused x = cont_pte_trans_huge(pte, CORRUPT_CONT_PTE_REASON_CH_PTE_RANGE);}
+#endif
+				/* we let cow occur always on base pages for file pages */
+				if ((next - addr != HPAGE_CONT_PTE_SIZE) || (!anon && vma->vm_flags & PROT_WRITE)) {
+					__split_huge_cont_pte(vma, pte, addr, false, NULL, ptl);
+					/*
+					 * for anon hugepage, we have only dropped cont-bit in __split_huge_cont_pte
+					 * we need to traverse non-cont pte to change their permissions
+					 */
+					if (anon)
+						goto again_pte;
+				} else {
+					change_huge_cont_pte(vma, pte, addr, newprot, cp_flags);
+				}
+				/* "do while()" will do "pte++" and "addr + PAGE_SIZE" */
+				pte += (next - PAGE_SIZE - addr)/PAGE_SIZE;
+				addr = next - PAGE_SIZE;
+				continue;
+			}
+#endif
 			oldpte = ptep_modify_prot_start(vma, addr, pte);
 			ptent = pte_modify(oldpte, newprot);
 			if (preserve_write)
@@ -481,7 +509,7 @@ success:
 	 * held in write mode.
 	 */
 	vm_write_begin(vma);
-	WRITE_ONCE(vma->vm_flags, newflags);
+	WRITE_ONCE(vma->vm_flags, vma_pad_fixup_flags(vma, newflags));
 	dirty_accountable = vma_wants_writenotify(vma, vma->vm_page_prot);
 	vma_set_page_prot(vma);
 
