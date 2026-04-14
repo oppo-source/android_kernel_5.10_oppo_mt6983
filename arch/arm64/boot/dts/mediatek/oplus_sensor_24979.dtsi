@@ -1,0 +1,5 @@
+#include "mediatek/oplus_sensor_24928.dtsi"
+
+&sar_1 {
+        reg_table_num = <5>; //LTE:5_4 channels
+};

@@ -95,7 +95,7 @@
 		#size-cells = <2>;
 		ranges;
 
-		scp_mem_reserved: scp_mem_region {
+		scp_mem_reserved: memory@50000000 {
 			compatible = "shared-dma-pool";
 			reg = <0 0x50000000 0 0x2900000>;
 			no-map;
@@ -628,7 +628,6 @@
 		};
 		pins_rts {
 			pinmux = <PINMUX_GPIO47__FUNC_URTS1>;
-			output-enable;
 		};
 		pins_cts {
 			pinmux = <PINMUX_GPIO46__FUNC_UCTS1>;
@@ -647,7 +646,6 @@
 		};
 		pins_rts {
 			pinmux = <PINMUX_GPIO47__FUNC_URTS1>;
-			output-enable;
 		};
 		pins_cts {
 			pinmux = <PINMUX_GPIO46__FUNC_UCTS1>;

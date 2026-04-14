@@ -27,7 +27,10 @@
 
 /* Registers */
 #define CGXX_CMRX_CFG			0x00
-#define CMR_EN				BIT_ULL(55)
+#define CMR_P2X_SEL_MASK		GENMASK_ULL(61, 59)
+#define CMR_P2X_SEL_SHIFT		59ULL
+#define CMR_P2X_SEL_NIX0		1ULL
+#define CMR_P2X_SEL_NIX1		2ULL
 #define DATA_PKT_TX_EN			BIT_ULL(53)
 #define DATA_PKT_RX_EN			BIT_ULL(54)
 #define CGX_LMAC_TYPE_SHIFT		40
@@ -52,6 +55,11 @@
 #define CGXX_SCRATCH1_REG		0x1058
 #define CGX_CONST			0x2000
 #define CGXX_SPUX_CONTROL1		0x10000
+#define CGXX_SPUX_LNX_FEC_CORR_BLOCKS	0x10700
+#define CGXX_SPUX_LNX_FEC_UNCORR_BLOCKS	0x10800
+#define CGXX_SPUX_RSFEC_CORR		0x10088
+#define CGXX_SPUX_RSFEC_UNCORR		0x10090
+
 #define CGXX_SPUX_CONTROL1_LBK		BIT_ULL(14)
 #define CGXX_GMP_PCS_MRX_CTL		0x30000
 #define CGXX_GMP_PCS_MRX_CTL_LBK	BIT_ULL(14)
@@ -142,5 +150,9 @@ int cgx_lmac_get_pause_frm(void *cgxd, int lmac_id,
 int cgx_lmac_set_pause_frm(void *cgxd, int lmac_id,
 			   u8 tx_pause, u8 rx_pause);
 void cgx_lmac_ptp_config(void *cgxd, int lmac_id, bool enable);
+u8 cgx_lmac_get_p2x(int cgx_id, int lmac_id);
+int cgx_set_fec(u64 fec, int cgx_id, int lmac_id);
+int cgx_get_fec_stats(void *cgxd, int lmac_id, struct cgx_fec_stats_rsp *rsp);
+int cgx_get_phy_fec_stats(void *cgxd, int lmac_id);
 
 #endif /* CGX_H */

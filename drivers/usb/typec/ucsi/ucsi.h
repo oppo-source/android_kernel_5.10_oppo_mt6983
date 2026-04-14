@@ -221,12 +221,12 @@ struct ucsi_cable_property {
 #define UCSI_CABLE_PROP_FLAG_VBUS_IN_CABLE	BIT(0)
 #define UCSI_CABLE_PROP_FLAG_ACTIVE_CABLE	BIT(1)
 #define UCSI_CABLE_PROP_FLAG_DIRECTIONALITY	BIT(2)
-#define UCSI_CABLE_PROP_FLAG_PLUG_TYPE(_f_)	((_f_) & GENMASK(3, 0))
+#define UCSI_CABLE_PROP_FLAG_PLUG_TYPE(_f_)	(((_f_) & GENMASK(4, 3)) >> 3)
 #define   UCSI_CABLE_PROPERTY_PLUG_TYPE_A	0
 #define   UCSI_CABLE_PROPERTY_PLUG_TYPE_B	1
 #define   UCSI_CABLE_PROPERTY_PLUG_TYPE_C	2
 #define   UCSI_CABLE_PROPERTY_PLUG_OTHER	3
-#define UCSI_CABLE_PROP_MODE_SUPPORT		BIT(5)
+#define UCSI_CABLE_PROP_FLAG_MODE_SUPPORT	BIT(5)
 	u8 latency;
 } __packed;
 
@@ -289,6 +289,9 @@ struct ucsi {
 	struct ucsi_connector *connector;
 
 	struct work_struct work;
+#define UCSI_ROLE_SWITCH_RETRY_PER_HZ	10
+#define UCSI_ROLE_SWITCH_INTERVAL	(HZ / UCSI_ROLE_SWITCH_RETRY_PER_HZ)
+#define UCSI_ROLE_SWITCH_WAIT_COUNT	(10 * UCSI_ROLE_SWITCH_RETRY_PER_HZ)
 
 	/* PPM Communication lock */
 	struct mutex ppm_lock;
@@ -302,6 +305,25 @@ struct ucsi {
 #define COMMAND_PENDING	1
 #define ACK_PENDING	2
 #define EVENT_PROCESSING	3
+};
+
+/**
+ * struct ucsi_android - contains parameters without modifying the format
+ * of ucsi struct.
+ * @ucsi: contains the ucsi reference.
+ * @work: work structure for queuing ucsi_init_work.
+ * @work_count: to track the wait count(MAX= UCSI_ROLE_SWITCH_WAIT_COUNT).
+ *
+ * Required to address Bug: 260537721
+ * If the role switch module probes late the
+ * fwnode_usb_role_switch_get() will fail with -EPROBE_DEFER.
+ * To recover from this, restart the ucsi_init_work
+ * to find the fwnode again using a delayed workqueue.
+ */
+struct ucsi_android {
+	struct ucsi ucsi;
+	struct delayed_work work;
+	int work_count;
 };
 
 #define UCSI_MAX_SVID		5
@@ -369,7 +391,7 @@ ucsi_register_displayport(struct ucsi_connector *con,
 			  bool override, int offset,
 			  struct typec_altmode_desc *desc)
 {
-	return NULL;
+	return typec_port_register_altmode(con->port, desc);
 }
 
 static inline void

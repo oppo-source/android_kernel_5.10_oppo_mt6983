@@ -1,0 +1,75 @@
+/* Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&accdet {
+	is_hp_switch;
+	headset-three-key-threshold = <0 82 170 306>;
+};
+
+&mt6358codec {
+	mediatek,init_dis_micbias;
+};
+
+&i2c6 {
+	fsa4480: fsa4480@42 {
+		compatible = "qcom,fsa4480-i2c";
+		reg = <0x42>;
+		is_sw_irq;
+		status = "okay";
+	};
+};
+
+&i2c9 {
+	clock-frequency = <400000>;
+	mediatek,use-open-drain;
+        aw87xxx_pa_58@58 {
+ 		compatible = "awinic,aw87xxx_pa_2_x_0";
+ 		reset-gpio = <&pio 103 0>;
+		reg = <0x58>;
+		oplus_4pa;
+ 		dev_index = < 0 >;
+ 		status = "okay";
+ 	};
+	aw87xxx_pa_5A@5A {
+ 		compatible = "awinic,aw87xxx_pa_2_x_0";
+ 		reset-gpio = <&pio 97 0>;
+ 		reg = <0x5A>;
+		oplus_4pa;
+ 		dev_index = < 1 >;
+ 		status = "okay";
+ 	};
+	aw87xxx_pa_59@59 {
+ 		compatible = "awinic,aw87xxx_pa_2_x_0";
+ 		reset-gpio = <&pio 104 0>;
+ 		reg = <0x59>;
+		oplus_4pa;
+ 		dev_index = < 2 >;
+ 		status = "okay";
+ 	};
+ 	aw87xxx_pa_5B@5B {
+ 		compatible = "awinic,aw87xxx_pa_2_x_0";
+ 		reset-gpio = <&pio 98 0>;
+ 		reg = <0x5B>;
+		oplus_4pa;
+ 		dev_index = < 3 >;
+ 		status = "okay";
+ 	};
+};
+
+&sound {
+ 	/* this dtsi config for product's special config, AudioHal read ctl 'OPLUS_AUDIO_EXTEN_CONFIG' get the values*
+ 	 * 1st value --> PA type: 0:NXP Pa, 1:Awinic Pa 2:sia81xx Pa*/
+	audio_extern_config = <1>;
+	oplus,special-pa-dapm = <1>;
+	/* this dtsi config is 4 analog pa in Audio kernel for control*/
+	oplus,oplus-analog-4pa = <1>;
+};

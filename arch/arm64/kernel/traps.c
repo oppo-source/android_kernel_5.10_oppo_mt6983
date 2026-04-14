@@ -146,7 +146,7 @@ void die(const char *str, struct pt_regs *regs, int err)
 	raw_spin_unlock_irqrestore(&die_lock, flags);
 
 	if (ret != NOTIFY_STOP)
-		do_exit(SIGSEGV);
+		make_task_dead(SIGSEGV);
 }
 
 static void arm64_show_signal(int signo, const char *str)
@@ -824,6 +824,7 @@ asmlinkage void noinstr handle_bad_stack(struct pt_regs *regs)
 	 * We use nmi_panic to limit the potential for recusive overflows, and
 	 * to get a better stack trace.
 	 */
+	trace_android_rvh_handle_bad_stack(regs, esr, far);
 	nmi_panic(NULL, "kernel stack overflow");
 	cpu_park_loop();
 }
@@ -931,7 +932,7 @@ static struct break_hook bug_break_hook = {
 static int reserved_fault_handler(struct pt_regs *regs, unsigned int esr)
 {
 	pr_err("%s generated an invalid instruction at %pS!\n",
-		in_bpf_jit(regs) ? "BPF JIT" : "Kernel text patching",
+		"Kernel text patching",
 		(void *)instruction_pointer(regs));
 
 	/* We cannot handle this */

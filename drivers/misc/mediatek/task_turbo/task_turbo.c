@@ -27,6 +27,9 @@
 #include <trace/hooks/wqlockup.h>
 #include <trace/hooks/cgroup.h>
 #include <trace/hooks/sys.h>
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+#include <../kernel/oplus_cpu/sched/sched_assist/sa_fair.h>
+#endif
 
 #include <task_turbo.h>
 
@@ -313,6 +316,7 @@ static void probe_android_vh_binder_restore_priority(void *ignore,
 		binder_stop_turbo_inherit(cur);
 }
 
+#if !IS_ENABLED(CONFIG_OPLUS_LOCKING_STRATEGY)
 static void probe_android_vh_alter_futex_plist_add(void *ignore, struct plist_node *q_list,
 						struct plist_head *hb_chain, bool *already_on_hb)
 {
@@ -344,6 +348,7 @@ static void probe_android_vh_alter_futex_plist_add(void *ignore, struct plist_no
 
 	*already_on_hb = false;
 }
+#endif
 
 static void probe_android_rvh_select_task_rq_fair(void *ignore, struct task_struct *p,
 							int prev_cpu, int sd_flag,
@@ -526,6 +531,16 @@ int find_best_turbo_cpu(struct task_struct *p)
 			    !cpu_active(iter_cpu))
 				continue;
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+			/*
+			 * TODO: If turbo task is ux task, should we add more conditions
+			 */
+			/*
+			if (should_ux_task_skip_cpu(p, iter_cpu))
+				continue;
+			*/
+#endif
+
 			/*
 			 * favor tasks that prefer idle cpus
 			 * to improve latency
@@ -573,27 +588,24 @@ int select_turbo_cpu(struct task_struct *p)
 static void set_load_weight(struct task_struct *p, bool update_load)
 {
 	int prio = p->static_prio - MAX_RT_PRIO;
-	struct load_weight *load = &p->se.load;
+	struct load_weight lw;
 
-	/*
-	 * SCHED_IDLE tasks get minimal weight:
-	 */
 	if (task_has_idle_policy(p)) {
-		load->weight = scale_load(WEIGHT_IDLEPRIO);
-		load->inv_weight = WMULT_IDLEPRIO;
-		return;
+		lw.weight = scale_load(WEIGHT_IDLEPRIO);
+		lw.inv_weight = WMULT_IDLEPRIO;
+	} else {
+		lw.weight = scale_load(sched_prio_to_weight[prio]);
+		lw.inv_weight = sched_prio_to_wmult[prio];
 	}
 
 	/*
 	 * SCHED_OTHER tasks have to update their load when changing their
 	 * weight
 	 */
-	if (update_load && p->sched_class == &fair_sched_class) {
-		reweight_task(p, prio);
-	} else {
-		load->weight = scale_load(sched_prio_to_weight[prio]);
-		load->inv_weight = sched_prio_to_wmult[prio];
-	}
+	if (update_load && p->sched_class == &fair_sched_class)
+		reweight_task(p, &lw);
+	else
+		p->se.load = lw;
 }
 
 int idle_cpu(int cpu)
@@ -634,6 +646,11 @@ static void rwsem_list_add(struct task_struct *task,
 			   struct list_head *head)
 {
 	if (!sub_feat_enable(SUB_FEAT_LOCK)) {
+#if IS_ENABLED(CONFIG_OPLUS_LOCKING_STRATEGY)
+		if (oplus_rwsem_list_add(task, entry, head)) {
+			return;
+		}
+#endif
 		list_add_tail(entry, head);
 		return;
 	}
@@ -653,6 +670,11 @@ static void rwsem_list_add(struct task_struct *task,
 			}
 		}
 	}
+#if IS_ENABLED(CONFIG_OPLUS_LOCKING_STRATEGY)
+	if (oplus_rwsem_list_add(task, entry, head)) {
+		return;
+	}
+#endif
 	list_add_tail(entry, head);
 }
 
@@ -1422,12 +1444,14 @@ static int __init init_task_turbo(void)
 		goto failed;
 	}
 
+#if !IS_ENABLED(CONFIG_OPLUS_LOCKING_STRATEGY)
 	ret = register_trace_android_vh_alter_futex_plist_add(
 			probe_android_vh_alter_futex_plist_add, NULL);
 	if (ret) {
 		ret_erri_line = __LINE__;
 		goto failed;
 	}
+#endif
 
 	ret = register_trace_android_rvh_select_task_rq_fair(
 			probe_android_rvh_select_task_rq_fair, NULL);

@@ -48,7 +48,9 @@
 	{(unsigned long)__GFP_WRITE,		"__GFP_WRITE"},		\
 	{(unsigned long)__GFP_RECLAIM,		"__GFP_RECLAIM"},	\
 	{(unsigned long)__GFP_DIRECT_RECLAIM,	"__GFP_DIRECT_RECLAIM"},\
-	{(unsigned long)__GFP_KSWAPD_RECLAIM,	"__GFP_KSWAPD_RECLAIM"}\
+	{(unsigned long)__GFP_KSWAPD_RECLAIM,	"__GFP_KSWAPD_RECLAIM"},\
+	{(unsigned long)__GFP_ZEROTAGS,		"__GFP_ZEROTAGS"},	\
+	{(unsigned long)__GFP_SKIP_KASAN_POISON,"__GFP_SKIP_KASAN_POISON"}\
 
 #define show_gfp_flags(flags)						\
 	(flags) ? __print_flags(flags, "|",				\
@@ -81,8 +83,17 @@
 
 #ifdef CONFIG_64BIT
 #define IF_HAVE_PG_ARCH_2(flag,string) ,{1UL << flag, string}
+
+/* With CONFIG_NUMA_BALANCING LAST_CPUPID_WIDTH consumes OEM-used page flags */
+#ifdef CONFIG_NUMA_BALANCING
+#define IF_HAVE_PG_OEM_RESERVED(flag,string)
+#else
+#define IF_HAVE_PG_OEM_RESERVED(flag,string) ,{1UL << flag, string}
+#endif
+
 #else
 #define IF_HAVE_PG_ARCH_2(flag,string)
+#define IF_HAVE_PG_OEM_RESERVED(flag,string)
 #endif
 
 #ifdef CONFIG_KASAN_HW_TAGS
@@ -125,9 +136,12 @@ IF_HAVE_PG_HWPOISON(PG_hwpoison,	"hwpoison"	)		\
 IF_HAVE_PG_IDLE(PG_young,		"young"		)		\
 IF_HAVE_PG_IDLE(PG_idle,		"idle"		)		\
 IF_HAVE_PG_ARCH_2(PG_arch_2,		"arch_2"	)		\
-IF_HAVE_PG_SKIP_KASAN_POISON(PG_skip_kasan_poison, "skip_kasan_poison")	\
-IF_HAVE_PG_DEBUG(PG_debug,		"debug"		)
-
+IF_HAVE_PG_DEBUG(PG_debug,		"debug"		) \
+IF_HAVE_PG_OEM_RESERVED(PG_oem_reserved_1,"oem_reserved_1")		\
+IF_HAVE_PG_OEM_RESERVED(PG_oem_reserved_2,"oem_reserved_2")		\
+IF_HAVE_PG_OEM_RESERVED(PG_oem_reserved_3,"oem_reserved_3")		\
+IF_HAVE_PG_OEM_RESERVED(PG_oem_reserved_4,"oem_reserved_4")		\
+IF_HAVE_PG_SKIP_KASAN_POISON(PG_skip_kasan_poison, "skip_kasan_poison")
 
 #define show_page_flags(flags)						\
 	(flags) ? __print_flags(flags, "|",				\
